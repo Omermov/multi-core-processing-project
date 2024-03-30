@@ -59,6 +59,8 @@ Authors of the OpenMP code:
 #include "../common/npb-CPP.hpp"
 #include "npbparams.hpp"
 
+#include <ittnotify.h>
+
 /*
  * ---------------------------------------------------------------------
  * u0, u1, u2 are the main arrays in the problem.
@@ -256,6 +258,7 @@ int main(int argc, char **argv)
 	 * short benchmark. the other NPB 2 implementations are similar.
 	 * ---------------------------------------------------------------------
 	 */
+	printf("setup\n");
 	for (i = 0; i < T_MAX; i++)
 	{
 		timer_clear(i);
@@ -273,6 +276,10 @@ int main(int argc, char **argv)
 	 * be timed, in contrast to other benchmarks.
 	 * ---------------------------------------------------------------------
 	 */
+
+	printf("__itt_resume()\n");
+	__itt_resume();
+
 	for (i = 0; i < T_MAX; i++)
 	{
 		timer_clear(i);
@@ -356,10 +363,13 @@ int main(int argc, char **argv)
 		}
 	} /* end parallel */
 
-	verify(NX, NY, NZ, niter, &verified, &class_npb);
-
 	timer_stop(T_TOTAL);
 	total_time = timer_read(T_TOTAL);
+
+	__itt_pause();
+	printf("__itt_pause()\n");
+
+	verify(NX, NY, NZ, niter, &verified, &class_npb);
 
 	if (total_time != 0.0)
 	{
