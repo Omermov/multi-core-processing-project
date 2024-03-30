@@ -30,3 +30,11 @@
 *.exe
 *.out
 *.app
+
+ours/bin/**
+ours/FT/npbparams.hpp
+ours/sys/setparams
+
+reference/bin/**
+reference/FT/npbparams.hpp
+reference/sys/setparams
