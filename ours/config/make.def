@@ -27,7 +27,7 @@
 #---------------------------------------------------------------------------
 # This is the C compiler used for OpenMP programs
 #---------------------------------------------------------------------------
-CC = g++ -std=c++14
+CC = g++ -std=c++14 -g -mavx512vl
 
 
 # This links C programs; usually the same as ${CC}
