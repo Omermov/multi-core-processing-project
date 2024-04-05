@@ -359,6 +359,7 @@ int main(int argc, char **argv)
 				timer_start(T_CHECKSUM);
 			}
 
+// TODO: I think this barrier is not required
 #pragma omp barrier
 			checksum(iter, u1, dims[0], dims[1], dims[2]);
 
@@ -843,7 +844,6 @@ static void evolve(void *restrict pointer_u0,
 #pragma omp for
 	for (k = 0; k < d3; k++)
 	{
-
 		for (j = 0; j < d2; j++)
 		{
 			for (i = 0; i < d1; i++)
@@ -854,13 +854,15 @@ static void evolve(void *restrict pointer_u0,
 #else
 				u1[k][j][i].real = u0[k][j][i].real * twiddle[k][j][i];
 				u1[k][j][i].imag = u0[k][j][i].imag * twiddle[k][j][i];
+				u0[k][j][i].real = u1[k][j][i].real;
+				u0[k][j][i].imag = u1[k][j][i].imag;
 #endif
 			}
 		}
 
-#if !defined(REF)
-		memcpy((void *)u0[k], (void *)u1[k], d1 * d2 * sizeof(dcomplex));
-#endif
+		// #if !defined(REF)
+		// 		memcpy((void *)u0[k], (void *)u1[k], d1 * d2 * sizeof(dcomplex));
+		// #endif
 	}
 }
 
