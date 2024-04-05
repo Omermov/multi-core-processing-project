@@ -49,9 +49,12 @@ C_INC = -I../common -I/opt/intel/oneapi/vtune/2024.1/sdk/include
 #---------------------------------------------------------------------------
 # Global *compile time* flags for C programs
 #---------------------------------------------------------------------------
-CFLAGS = -xCORE-AVX512 -O3 -fiopenmp -fopenmp-targets=spir64 -qopt-report=max
+CFLAGS = -xCORE-AVX512 -Ofast -fiopenmp -ipo
+CFLAGS += -qopt-mem-layout-trans=4 -mprefer-vector-width=512
+CFLAGS += -fopenmp-targets=spir64 # Required for offloading
+CFLAGS += -qopt-report=max # Add report files
 CFLAGS += -g -gline-tables-only -fdebug-info-for-profiling
-
+# CFLAGS += -DREF
 
 #---------------------------------------------------------------------------
 # Global *link time* flags. Flags for increasing maximum executable

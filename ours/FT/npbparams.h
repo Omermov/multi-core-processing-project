@@ -13,7 +13,7 @@
 #define NYP              512
 #define NTOTAL           134217728
 #define NTOTALP          134479872
-#define DEFAULT_BEHAVIOR 1
+#define DEFAULT_BEHAVIOR 8
 #define	CONVERTDOUBLE	FALSE
 #define COMPILETIME "05 Apr 2024"
 #define NPBVERSION "4.1"
@@ -23,6 +23,6 @@
 #define CS2 "$(CC)"
 #define CS3 "-lpthread -littnotify -L/opt/intel/oneapi/v..."
 #define CS4 "-I../common -I/opt/intel/oneapi/vtune/2024...."
-#define CS5 "-xCORE-AVX512 -O3 -fiopenmp -fopenmp-target..."
+#define CS5 "-xCORE-AVX512 -Ofast -fiopenmp -ipo"
 #define CS6 "$(CFLAGS)"
 #define CS7 "randdp"

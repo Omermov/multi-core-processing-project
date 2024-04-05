@@ -877,7 +877,7 @@ void write_ft_info(FILE *fp, char class_npb)
 	fprintf(fp, "#define NYP              %d\n", ny);
 	fprintf(fp, "#define NTOTAL           %llu\n", (unsigned long long)nx * ny * nz);
 	fprintf(fp, "#define NTOTALP          %llu\n", (unsigned long long)(nx + 1) * ny * nz);
-	fprintf(fp, "#define DEFAULT_BEHAVIOR %d\n", 1);
+	fprintf(fp, "#define DEFAULT_BEHAVIOR %d\n", 16);
 }
 
 /*

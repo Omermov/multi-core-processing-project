@@ -59,6 +59,7 @@ Authors of the OpenMP code:
 #include "../common/npb-CPP.h"
 #include "npbparams.h"
 
+#include <string.h>
 #include <stdbool.h>
 #include <ittnotify.h>
 
@@ -448,7 +449,12 @@ static void cffts1(int is,
 			{
 				for (i = 0; i < d1; i++)
 				{
+#if defined(REF)
 					y1[i][j] = x[k][j + jj][i];
+#else
+					y1[i][j].real = x[k][j + jj][i].real;
+					y1[i][j].imag = x[k][j + jj][i].imag;
+#endif
 				}
 			}
 			cfftz(is, logd1, d1, y1, y2);
@@ -456,7 +462,12 @@ static void cffts1(int is,
 			{
 				for (i = 0; i < d1; i++)
 				{
+#if defined(REF)
 					xout[k][j + jj][i] = y1[i][j];
+#else
+					xout[k][j + jj][i].real = y1[i][j].real;
+					xout[k][j + jj][i].imag = y1[i][j].imag;
+#endif
 				}
 			}
 		}
@@ -499,18 +510,26 @@ static void cffts2(int is,
 		{
 			for (j = 0; j < d2; j++)
 			{
+#if defined(REF)
 				for (i = 0; i < FFTBLOCK; i++)
 				{
 					y1[j][i] = x[k][j][i + ii];
 				}
+#else
+				memcpy((void *)y1[j], (void *)(&x[k][j][ii]), FFTBLOCK * sizeof(dcomplex));
+#endif
 			}
 			cfftz(is, logd2, d2, y1, y2);
 			for (j = 0; j < d2; j++)
 			{
+#if defined(REF)
 				for (i = 0; i < FFTBLOCK; i++)
 				{
 					xout[k][j][i + ii] = y1[j][i];
 				}
+#else
+				memcpy((void *)(&xout[k][j][ii]), (void *)y1[j], FFTBLOCK * sizeof(dcomplex));
+#endif
 			}
 		}
 	}
@@ -552,18 +571,26 @@ static void cffts3(int is,
 		{
 			for (k = 0; k < d3; k++)
 			{
+#if defined(REF)
 				for (i = 0; i < FFTBLOCK; i++)
 				{
 					y1[k][i] = x[k][j][i + ii];
 				}
+#else
+				memcpy((void *)y1[k], (void *)(&x[k][j][ii]), FFTBLOCK * sizeof(dcomplex));
+#endif
 			}
 			cfftz(is, logd3, d3, y1, y2);
 			for (k = 0; k < d3; k++)
 			{
+#if defined(REF)
 				for (i = 0; i < FFTBLOCK; i++)
 				{
 					xout[k][j][i + ii] = y1[k][i];
 				}
+#else
+				memcpy((void *)(&xout[k][j][ii]), (void *)y1[k], FFTBLOCK * sizeof(dcomplex));
+#endif
 			}
 		}
 	}
@@ -598,14 +625,14 @@ static void cfftz(int is,
 	 * check if input parameters are invalid.
 	 * ---------------------------------------------------------------------
 	 */
-	mx = (int)(u[0].real);
-	if ((is != 1 && is != -1) || m < 1 || m > mx)
-	{
-		printf("CFFTZ: Either U has not been initialized, or else\n"
-					 "one of the input parameters is invalid%5d%5d%5d\n",
-					 is, m, mx);
-		exit(EXIT_FAILURE);
-	}
+	// mx = (int)(u[0].real);
+	// if ((is != 1 && is != -1) || m < 1 || m > mx)
+	// {
+	// 	printf("CFFTZ: Either U has not been initialized, or else\n"
+	// 				 "one of the input parameters is invalid%5d%5d%5d\n",
+	// 				 is, m, mx);
+	// 	exit(EXIT_FAILURE);
+	// }
 
 	/*
 	 * ---------------------------------------------------------------------
@@ -622,6 +649,7 @@ static void cfftz(int is,
 			 * copy Y to X.
 			 * ---------------------------------------------------------------------
 			 */
+#if defined(REF)
 			for (j = 0; j < n; j++)
 			{
 				for (i = 0; i < FFTBLOCK; i++)
@@ -629,6 +657,9 @@ static void cfftz(int is,
 					x[j][i] = y[j][i];
 				}
 			}
+#else
+			memcpy((void *)x, (void *)y, n * FFTBLOCK * sizeof(dcomplex));
+#endif
 			break;
 		}
 		fftz2(is, l + 1, m, n, FFTBLOCK, FFTBLOCKPAD, u, y, x);
@@ -741,7 +772,7 @@ static void compute_initial_conditions(void *pointer_u0,
 	ipow46(A, 2 * NX * NY, &an);
 
 	starts[0] = start;
-	for (int k = 1; k < dims[2]; k++)
+	for (int k = 1; k < d3; k++)
 	{
 		randlc(&start, an);
 		starts[k] = start;
@@ -753,10 +784,10 @@ static void compute_initial_conditions(void *pointer_u0,
  * ---------------------------------------------------------------------
  */
 #pragma omp parallel for private(k, j, x0)
-	for (k = 0; k < dims[2]; k++)
+	for (k = 0; k < d3; k++)
 	{
 		x0 = starts[k];
-		for (j = 0; j < dims[1]; j++)
+		for (j = 0; j < d2; j++) // TODO: vectorize vranlc?
 		{
 			vranlc(2 * NX, &x0, A, (double *)&u0[k][j][0]);
 		}
@@ -783,14 +814,24 @@ static void evolve(void *restrict pointer_u0,
 #pragma omp for
 	for (k = 0; k < d3; k++)
 	{
+
 		for (j = 0; j < d2; j++)
 		{
 			for (i = 0; i < d1; i++)
 			{
+#if defined(REF)
 				u0[k][j][i] = dcomplex_mul2(u0[k][j][i], twiddle[k][j][i]);
 				u1[k][j][i] = u0[k][j][i];
+#else
+				u1[k][j][i].real = u0[k][j][i].real * twiddle[k][j][i];
+				u1[k][j][i].imag = u0[k][j][i].imag * twiddle[k][j][i];
+#endif
 			}
 		}
+
+#if !defined(REF)
+		memcpy((void *)u0[k], (void *)u1[k], d1 * d2 * sizeof(dcomplex));
+#endif
 	}
 }
 
@@ -863,7 +904,12 @@ static void fft_init(int n)
 		for (i = 0; i <= ln - 1; i++)
 		{
 			ti = i * t;
+#if defined(REF)
 			u[i + ku - 1] = dcomplex_create(cos(ti), sin(ti));
+#else
+			u[i + ku - 1].real = cos(ti);
+			u[i + ku - 1].imag = sin(ti);
+#endif
 		}
 
 		ku = ku + ln;
@@ -887,7 +933,7 @@ static void fftz2(int is,
 									dcomplex y[][FFTBLOCKPAD])
 {
 	int k, n1, li, lj, lk, ku, i, j, i11, i12, i21, i22;
-	dcomplex u1, x11, x21;
+	dcomplex u1;
 
 	/*
 	 * ---------------------------------------------------------------------
@@ -906,6 +952,8 @@ static void fftz2(int is,
 		i12 = i11 + n1;
 		i21 = i * lj;
 		i22 = i21 + lk;
+
+#if defined(REF)
 		if (is >= 1)
 		{
 			u1 = u[ku + i];
@@ -914,6 +962,14 @@ static void fftz2(int is,
 		{
 			u1 = dconjg(u[ku + i]);
 		}
+#else
+		u1.real = u[ku + i].real;
+		u1.imag = u[ku + i].imag;
+		if (is < 0) /* either 1 or -1 */
+		{
+			u1.imag *= -1; /* conjugate */
+		}
+#endif
 
 		/*
 		 * ---------------------------------------------------------------------
@@ -924,10 +980,24 @@ static void fftz2(int is,
 		{
 			for (j = 0; j < ny; j++)
 			{
-				x11 = x[i11 + k][j];
-				x21 = x[i12 + k][j];
+#if defined(REF)
+				dcomplex x11 = x[i11 + k][j];
+				dcomplex x21 = x[i12 + k][j];
 				y[i21 + k][j] = dcomplex_add(x11, x21);
 				y[i22 + k][j] = dcomplex_mul(u1, dcomplex_sub(x11, x21));
+#else
+				dcomplex *p_x11 = &x[i11 + k][j];
+				dcomplex *p_x21 = &x[i12 + k][j];
+
+				y[i21 + k][j].real = p_x11->real + p_x21->real;
+				y[i21 + k][j].imag = p_x11->imag + p_x21->imag;
+
+				double x11_sub_x21_real = p_x11->real - p_x21->real;
+				double x11_sub_x21_imag = p_x11->imag - p_x21->imag;
+
+				y[i22 + k][j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
+				y[i22 + k][j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
+#endif
 			}
 		}
 	}
@@ -970,6 +1040,7 @@ static void init_ui(void *pointer_u0,
 #pragma omp parallel for private(i, j, k)
 	for (k = 0; k < d3; k++)
 	{
+#if defined(REF)
 		for (j = 0; j < d2; j++)
 		{
 			for (i = 0; i < d1; i++)
@@ -979,6 +1050,11 @@ static void init_ui(void *pointer_u0,
 				twiddle[k][j][i] = 0.0;
 			}
 		}
+#else
+		memset((void *)u0[k], 0, d1 * d2 * sizeof(dcomplex));
+		memset((void *)u1[k], 0, d1 * d2 * sizeof(dcomplex));
+		memset((void *)twiddle[k], 0, d1 * d2 * sizeof(double));
+#endif
 	}
 }
 
