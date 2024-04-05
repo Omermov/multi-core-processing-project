@@ -55,6 +55,7 @@ CFLAGS += -fopenmp-targets=spir64 # Required for offloading
 CFLAGS += -qopt-report=max # Add report files
 CFLAGS += -g -gline-tables-only -fdebug-info-for-profiling
 # CFLAGS += -DREF
+# CFLAGS += -DTIMERS_ENABLED
 
 #---------------------------------------------------------------------------
 # Global *link time* flags. Flags for increasing maximum executable

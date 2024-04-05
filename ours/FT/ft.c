@@ -157,8 +157,6 @@ static dcomplex(*u1);
 static int(*dims);
 #endif
 static int niter;
-static bool timers_enabled;
-static bool debug;
 
 /* function prototypes */
 static void cffts1(int is,
@@ -287,16 +285,19 @@ int main(int argc, char **argv)
 
 	__itt_resume();
 
+#if defined(TIMERS_ENABLED)
 	for (i = 0; i < T_MAX; i++)
 	{
 		timer_clear(i);
 	}
+#else
+	timer_clear(T_TOTAL);
+#endif
 
 	timer_start(T_TOTAL);
-	if (timers_enabled == TRUE)
-	{
-		timer_start(T_SETUP);
-	}
+#if defined(TIMERS_ENABLED)
+	timer_start(T_SETUP);
+#endif
 
 	compute_indexmap(twiddle, dims[0], dims[1], dims[2]);
 
@@ -306,68 +307,54 @@ int main(int argc, char **argv)
 
 #pragma omp parallel private(iter) firstprivate(niter)
 	{
-		if (timers_enabled == TRUE)
-		{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
+		{
 			timer_stop(T_SETUP);
-		}
-		if (timers_enabled == TRUE)
-		{
-#pragma omp master
 			timer_start(T_FFT);
 		}
+#endif
 
 		fft(1, u1, u0);
 
-		if (timers_enabled == TRUE)
-		{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-			timer_stop(T_FFT);
-		}
-
+		timer_stop(T_FFT);
+#endif
 		for (iter = 1; iter <= niter; iter++)
 		{
-			if (timers_enabled == TRUE)
-			{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-				timer_start(T_EVOLVE);
-			}
+			timer_start(T_EVOLVE);
+#endif
 
 			evolve(u0, u1, twiddle, dims[0], dims[1], dims[2]);
 
-			if (timers_enabled == TRUE)
-			{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
+			{
 				timer_stop(T_EVOLVE);
-			}
-			if (timers_enabled == TRUE)
-			{
-#pragma omp master
 				timer_start(T_FFT);
 			}
-
+#endif
 			fft(-1, u1, u1);
 
-			if (timers_enabled == TRUE)
-			{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
+			{
 				timer_stop(T_FFT);
-			}
-			if (timers_enabled == TRUE)
-			{
-#pragma omp master
 				timer_start(T_CHECKSUM);
 			}
+#endif
 
 // TODO: I think this barrier is not required
 #pragma omp barrier
 			checksum(iter, u1, dims[0], dims[1], dims[2]);
 
-			if (timers_enabled == TRUE)
-			{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-				timer_stop(T_CHECKSUM);
-			}
+			timer_stop(T_CHECKSUM);
+#endif
 		}
 	} /* end parallel */
 
@@ -410,10 +397,9 @@ int main(int argc, char **argv)
 									(char *)CS5,
 									(char *)CS6,
 									(char *)CS7);
-	if (timers_enabled == TRUE)
-	{
-		print_timers();
-	}
+#if defined(TIMERS_ENABLED)
+	print_timers();
+#endif
 
 	return 0;
 }
@@ -435,11 +421,10 @@ static void cffts1(int is,
 
 	logd1 = ilog2(d1);
 
-	if (timers_enabled)
-	{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-		timer_start(T_FFTX);
-	}
+	timer_start(T_FFTX);
+#endif
 
 #pragma omp for
 	for (k = 0; k < d3; k++)
@@ -474,11 +459,10 @@ static void cffts1(int is,
 		}
 	}
 
-	if (timers_enabled)
-	{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-		timer_stop(T_FFTX);
-	}
+	timer_stop(T_FFTX);
+#endif
 }
 
 static void cffts2(int is,
@@ -498,11 +482,10 @@ static void cffts2(int is,
 
 	logd2 = ilog2(d2);
 
-	if (timers_enabled)
-	{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-		timer_start(T_FFTY);
-	}
+	timer_start(T_FFTY);
+#endif
 
 #pragma omp for
 	for (k = 0; k < d3; k++)
@@ -535,11 +518,10 @@ static void cffts2(int is,
 		}
 	}
 
-	if (timers_enabled)
-	{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-		timer_stop(T_FFTY);
-	}
+	timer_stop(T_FFTY);
+#endif
 }
 
 static void cffts3(int is,
@@ -559,11 +541,10 @@ static void cffts3(int is,
 
 	logd3 = ilog2(d3);
 
-	if (timers_enabled)
-	{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-		timer_start(T_FFTZ);
-	}
+	timer_start(T_FFTZ);
+#endif
 
 #pragma omp for
 	for (j = 0; j < d2; j++)
@@ -596,11 +577,10 @@ static void cffts3(int is,
 		}
 	}
 
-	if (timers_enabled)
-	{
+#if defined(TIMERS_ENABLED)
 #pragma omp master
-		timer_stop(T_FFTZ);
-	}
+	timer_stop(T_FFTZ);
+#endif
 }
 
 /*
@@ -1165,17 +1145,6 @@ static void print_timers(void)
 static void setup(void)
 {
 	FILE *fp;
-	debug = FALSE;
-
-	if ((fp = fopen("timer.flag", "r")) != NULL)
-	{
-		timers_enabled = TRUE;
-		fclose(fp);
-	}
-	else
-	{
-		timers_enabled = FALSE;
-	}
 
 	niter = NITER_DEFAULT;
 

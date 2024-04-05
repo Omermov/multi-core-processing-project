@@ -13,7 +13,7 @@
 #define NYP              512
 #define NTOTAL           134217728
 #define NTOTALP          134479872
-#define DEFAULT_BEHAVIOR 8
+#define DEFAULT_BEHAVIOR 16
 #define	CONVERTDOUBLE	FALSE
 #define COMPILETIME "05 Apr 2024"
 #define NPBVERSION "4.1"
