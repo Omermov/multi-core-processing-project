@@ -675,6 +675,7 @@ static void checksum(int i,
 
 	dcomplex(*u1)[NY][NX] = (dcomplex(*)[NY][NX])pointer_u1;
 	int j, q, r, s;
+#if defined(REF)
 	dcomplex chk_worker = dcomplex_create(0.0, 0.0);
 	static dcomplex chk;
 
@@ -700,6 +701,34 @@ static void checksum(int i,
 		printf(" T =%5d     Checksum =%22.12e%22.12e\n", i, chk.real, chk.imag);
 		sums[i] = chk;
 	}
+#else
+	static double chk_worker_real, chk_worker_imag;
+
+#pragma omp single
+	{
+		chk_worker_real = 0.0;
+		chk_worker_imag = 0.0;
+	}
+
+#pragma omp for reduction(+ : chk_worker_real, chk_worker_imag)
+	for (j = 1; j <= 1024; j++)
+	{
+		q = j % NX;
+		r = (3 * j) % NY;
+		s = (5 * j) % NZ;
+		chk_worker_real += u1[s][r][q].real;
+		chk_worker_imag += u1[s][r][q].imag;
+	}
+
+#pragma omp single
+	{
+		chk_worker_real /= (double)(NTOTAL);
+		chk_worker_imag /= (double)(NTOTAL);
+		printf(" T =%5d     Checksum =%22.12e%22.12e\n", i, chk_worker_real, chk_worker_imag);
+		sums[i].real = chk_worker_real;
+		sums[i].imag = chk_worker_imag;
+	}
+#endif
 }
 
 /*
