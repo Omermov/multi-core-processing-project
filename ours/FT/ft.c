@@ -56,9 +56,10 @@ Authors of the OpenMP code:
 */
 
 #include "omp.h"
-#include "../common/npb-CPP.hpp"
-#include "npbparams.hpp"
+#include "../common/npb-CPP.h"
+#include "npbparams.h"
 
+#include <stdbool.h>
 #include <ittnotify.h>
 
 /*
@@ -147,16 +148,16 @@ static dcomplex u0[NTOTAL];
 static dcomplex u1[NTOTAL];
 static int dims[3];
 #else
-static dcomplex(*sums) = (dcomplex *)malloc(sizeof(dcomplex) * (NITER_DEFAULT + 1));
-static double(*twiddle) = (double *)malloc(sizeof(double) * (NTOTAL));
-static dcomplex(*u) = (dcomplex *)malloc(sizeof(dcomplex) * (MAXDIM));
-static dcomplex(*u0) = (dcomplex *)malloc(sizeof(dcomplex) * (NTOTAL));
-static dcomplex(*u1) = (dcomplex *)malloc(sizeof(dcomplex) * (NTOTAL));
-static int(*dims) = (int *)malloc(sizeof(int) * (3));
+static dcomplex(*sums);
+static double(*twiddle);
+static dcomplex(*u);
+static dcomplex(*u0);
+static dcomplex(*u1);
+static int(*dims);
 #endif
 static int niter;
-static boolean timers_enabled;
-static boolean debug;
+static bool timers_enabled;
+static bool debug;
 
 /* function prototypes */
 static void cffts1(int is,
@@ -201,9 +202,9 @@ static void compute_initial_conditions(void *pointer_u0,
 																			 int d1,
 																			 int d2,
 																			 int d3);
-static void evolve(void *pointer_u0,
-									 void *pointer_u1,
-									 void *pointer_twiddle,
+static void evolve(void *restrict pointer_u0,
+									 void *restrict pointer_u1,
+									 void *restrict pointer_twiddle,
 									 int d1,
 									 int d2,
 									 int d3);
@@ -230,13 +231,13 @@ static void init_ui(void *pointer_u0,
 static void ipow46(double a,
 									 int exponent,
 									 double *result);
-static void print_timers();
-static void setup();
+static void print_timers(void);
+static void setup(void);
 static void verify(int d1,
 									 int d2,
 									 int d3,
 									 int nt,
-									 boolean *verified,
+									 bool *verified,
 									 char *class_npb);
 
 /* ft */
@@ -244,11 +245,18 @@ int main(int argc, char **argv)
 {
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
 	printf(" DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION mode on\n");
+#else
+	sums = (dcomplex *)malloc(sizeof(dcomplex) * (NITER_DEFAULT + 1));
+	twiddle = (double *)malloc(sizeof(double) * (NTOTAL));
+	u = (dcomplex *)malloc(sizeof(dcomplex) * (MAXDIM));
+	u0 = (dcomplex *)malloc(sizeof(dcomplex) * (NTOTAL));
+	u1 = (dcomplex *)malloc(sizeof(dcomplex) * (NTOTAL));
+	dims = (int *)malloc(sizeof(int) * (3));
 #endif
 	int i;
 	int iter;
 	double total_time, mflops;
-	boolean verified;
+	bool verified;
 	char class_npb;
 
 	/*
@@ -258,7 +266,6 @@ int main(int argc, char **argv)
 	 * short benchmark. the other NPB 2 implementations are similar.
 	 * ---------------------------------------------------------------------
 	 */
-	printf("setup\n");
 	for (i = 0; i < T_MAX; i++)
 	{
 		timer_clear(i);
@@ -277,7 +284,6 @@ int main(int argc, char **argv)
 	 * ---------------------------------------------------------------------
 	 */
 
-	printf("__itt_resume()\n");
 	__itt_resume();
 
 	for (i = 0; i < T_MAX; i++)
@@ -367,7 +373,6 @@ int main(int argc, char **argv)
 	total_time = timer_read(T_TOTAL);
 
 	__itt_pause();
-	printf("__itt_pause()\n");
 
 	verify(NX, NY, NZ, niter, &verified, &class_npb);
 
@@ -395,7 +400,7 @@ int main(int argc, char **argv)
 									(char *)COMPILETIME,
 									(char *)COMPILERVERSION,
 									(char *)LIBVERSION,
-									std::getenv("OMP_NUM_THREADS"),
+									getenv("OMP_NUM_THREADS"),
 									(char *)CS1,
 									(char *)CS2,
 									(char *)CS3,
@@ -763,9 +768,9 @@ static void compute_initial_conditions(void *pointer_u0,
  * evolve u0 -> u1 (t time steps) in fourier space
  * ---------------------------------------------------------------------
  */
-static void evolve(void *pointer_u0,
-									 void *pointer_u1,
-									 void *pointer_twiddle,
+static void evolve(void *restrict pointer_u0,
+									 void *restrict pointer_u1,
+									 void *restrict pointer_twiddle,
 									 int d1,
 									 int d2,
 									 int d3)
@@ -1023,7 +1028,7 @@ static void ipow46(double a,
 	*result = r;
 }
 
-static void print_timers()
+static void print_timers(void)
 {
 	int i;
 	double t, t_m;
@@ -1050,7 +1055,7 @@ static void print_timers()
 	}
 }
 
-static void setup()
+static void setup(void)
 {
 	FILE *fp;
 	debug = FALSE;
@@ -1067,7 +1072,6 @@ static void setup()
 
 	niter = NITER_DEFAULT;
 
-	printf("\n\n NAS Parallel Benchmarks 4.1 Parallel C++ version with OpenMP - FT Benchmark\n\n");
 	printf(" Size                : %4dx%4dx%4d\n", NX, NY, NZ);
 	printf(" Iterations                  :%7d\n", niter);
 	printf("\n");
@@ -1102,7 +1106,7 @@ static void verify(int d1,
 									 int d2,
 									 int d3,
 									 int nt,
-									 boolean *verified,
+									 bool *verified,
 									 char *class_npb)
 {
 	int i;

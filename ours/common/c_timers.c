@@ -1,9 +1,9 @@
 /*
 MIT License
 
-Copyright (c) 2021 Parallel Applications Modelling Group - GMAP 
+Copyright (c) 2021 Parallel Applications Modelling Group - GMAP
 	GMAP website: https://gmap.pucrs.br
-	
+
 	Pontifical Catholic University of Rio Grande do Sul (PUCRS)
 	Av. Ipiranga, 6681, Porto Alegre - Brazil, 90619-900
 
@@ -27,7 +27,7 @@ SOFTWARE.
 
 ------------------------------------------------------------------------------
 
-The original NPB 3.4.1 version was written in Fortran and belongs to: 
+The original NPB 3.4.1 version was written in Fortran and belongs to:
 	http://www.nas.nasa.gov/Software/NPB/
 
 ------------------------------------------------------------------------------
@@ -35,25 +35,26 @@ The original NPB 3.4.1 version was written in Fortran and belongs to:
 The serial C++ version is a translation of the original NPB 3.4.1
 Serial C++ version: https://github.com/GMAP/NPB-CPP/tree/master/NPB-SER
 
-Authors of the C++ code: 
+Authors of the C++ code:
 	Dalvan Griebler <dalvangriebler@gmail.com>
 	Gabriell Araujo <hexenoften@gmail.com>
- 	Júnior Löff <loffjh@gmail.com>
+	Júnior Löff <loffjh@gmail.com>
 */
 
-#include "wtime.hpp"
-#include <cstdlib>
+#include "wtime.h"
+#include <stdlib.h>
 
 /*  prototype  */
-void wtime(double*);
+void wtime(double *);
 
 /*****************************************************************/
 /******         E  L  A  P  S  E  D  _  T  I  M  E          ******/
 /*****************************************************************/
-double elapsed_time(void){
+double elapsed_time(void)
+{
 	double t;
 	wtime(&t);
-	return(t);
+	return (t);
 }
 
 double start[64], elapsed[64];
@@ -61,31 +62,34 @@ double start[64], elapsed[64];
 /*****************************************************************/
 /******            T  I  M  E  R  _  C  L  E  A  R          ******/
 /*****************************************************************/
-void timer_clear(int n){
+void timer_clear(int n)
+{
 	elapsed[n] = 0.0;
 }
 
 /*****************************************************************/
 /******            T  I  M  E  R  _  S  T  A  R  T          ******/
 /*****************************************************************/
-void timer_start(int n){
+void timer_start(int n)
+{
 	start[n] = elapsed_time();
 }
 
 /*****************************************************************/
 /******            T  I  M  E  R  _  S  T  O  P             ******/
 /*****************************************************************/
-void timer_stop(int n){
+void timer_stop(int n)
+{
 	double t, now;
 	now = elapsed_time();
 	t = now - start[n];
 	elapsed[n] += t;
-
 }
 
 /*****************************************************************/
 /******            T  I  M  E  R  _  R  E  A  D             ******/
 /*****************************************************************/
-double timer_read(int n){
-	return(elapsed[n]);
+double timer_read(int n)
+{
+	return (elapsed[n]);
 }

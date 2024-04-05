@@ -27,7 +27,8 @@
 #---------------------------------------------------------------------------
 # This is the C compiler used for OpenMP programs
 #---------------------------------------------------------------------------
-CC = g++ -std=c++14 -g -mavx512vl
+# CC = g++ -std=c++14 -g -mavx512vl
+CC = icx
 
 
 # This links C programs; usually the same as ${CC}
@@ -37,8 +38,7 @@ CLINK	= $(CC)
 #---------------------------------------------------------------------------
 # These macros are passed to the linker
 #---------------------------------------------------------------------------
-C_LIB  = -lm -lpthread -littnotify -ldl -L/opt/intel/oneapi/vtune/2024.1/sdk/lib64
-
+C_LIB  = -lpthread -littnotify -L/opt/intel/oneapi/vtune/2024.1/sdk/lib64
 
 #---------------------------------------------------------------------------
 # These macros are passed to the compiler
@@ -49,14 +49,15 @@ C_INC = -I../common -I/opt/intel/oneapi/vtune/2024.1/sdk/include
 #---------------------------------------------------------------------------
 # Global *compile time* flags for C programs
 #---------------------------------------------------------------------------
-CFLAGS	= -O3 -fopenmp -mcmodel=medium
+CFLAGS = -xCORE-AVX512 -O3 -fiopenmp -fopenmp-targets=spir64 -qopt-report=max
+CFLAGS += -g -gline-tables-only -fdebug-info-for-profiling
 
 
 #---------------------------------------------------------------------------
 # Global *link time* flags. Flags for increasing maximum executable
 # size usually go here.
 #---------------------------------------------------------------------------
-CLINKFLAGS = -O3 -fopenmp -mcmodel=medium
+CLINKFLAGS = $(CFLAGS)
 
 
 #---------------------------------------------------------------------------
@@ -92,7 +93,7 @@ RAND   = randdp
 # For most machines,       use wtime.c
 # For SGI power challenge: use wtime_sgi64.c
 #---------------------------------------------------------------------------
-WTIME  = wtime.cpp
+WTIME  = wtime.c
 
 
 #---------------------------------------------------------------------------

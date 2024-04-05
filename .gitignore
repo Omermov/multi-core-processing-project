@@ -1,3 +1,7 @@
+# Optimization reports
+*.optrpt
+*.opt.yaml
+
 # Prerequisites
 *.d
 
