@@ -203,7 +203,7 @@ static void compute_initial_conditions(void *pointer_u0,
 																			 int d3);
 static void evolve(void *restrict pointer_u0,
 									 void *restrict pointer_u1,
-									 void *restrict pointer_twiddle,
+									 void const *restrict pointer_twiddle,
 									 int d1,
 									 int d2,
 									 int d3);
@@ -217,8 +217,8 @@ static void fftz2(int is,
 									int n,
 									int ny,
 									int ny1,
-									dcomplex u[],
-									dcomplex x[][FFTBLOCKPAD],
+									dcomplex const u[],
+									dcomplex const x[][FFTBLOCKPAD],
 									dcomplex y[][FFTBLOCKPAD]);
 static int ilog2(int n);
 static void init_ui(void *pointer_u0,
@@ -257,6 +257,7 @@ int main(int argc, char **argv)
 	double total_time, mflops;
 	bool verified;
 	char class_npb;
+	double t0, t1;
 
 	/*
 	 * ---------------------------------------------------------------------
@@ -265,10 +266,12 @@ int main(int argc, char **argv)
 	 * short benchmark. the other NPB 2 implementations are similar.
 	 * ---------------------------------------------------------------------
 	 */
+#if defined(TIMERS_ENABLED)
 	for (i = 0; i < T_MAX; i++)
 	{
 		timer_clear(i);
 	}
+#endif
 	setup();
 	init_ui(u0, u1, twiddle, dims[0], dims[1], dims[2]);
 	compute_indexmap(twiddle, dims[0], dims[1], dims[2]);
@@ -290,11 +293,10 @@ int main(int argc, char **argv)
 	{
 		timer_clear(i);
 	}
-#else
-	timer_clear(T_TOTAL);
 #endif
 
-	timer_start(T_TOTAL);
+	t0 = omp_get_wtime();
+
 #if defined(TIMERS_ENABLED)
 	timer_start(T_SETUP);
 #endif
@@ -358,8 +360,8 @@ int main(int argc, char **argv)
 		}
 	} /* end parallel */
 
-	timer_stop(T_TOTAL);
-	total_time = timer_read(T_TOTAL);
+	t1 = omp_get_wtime();
+	total_time = t1 - t0;
 
 	__itt_pause();
 
@@ -500,7 +502,12 @@ static void cffts2(int is,
 					y1[j][i] = x[k][j][i + ii];
 				}
 #else
-				memcpy((void *)y1[j], (void *)(&x[k][j][ii]), FFTBLOCK * sizeof(dcomplex));
+				for (i = 0; i < FFTBLOCK; i++)
+				{
+					y1[j][i].real = x[k][j][i + ii].real;
+					y1[j][i].imag = x[k][j][i + ii].imag;
+				}
+				// memcpy((void *)y1[j], (void *)(&x[k][j][ii]), FFTBLOCK * sizeof(dcomplex));
 #endif
 			}
 			cfftz(is, logd2, d2, y1, y2);
@@ -512,7 +519,12 @@ static void cffts2(int is,
 					xout[k][j][i + ii] = y1[j][i];
 				}
 #else
-				memcpy((void *)(&xout[k][j][ii]), (void *)y1[j], FFTBLOCK * sizeof(dcomplex));
+				for (i = 0; i < FFTBLOCK; i++)
+				{
+					xout[k][j][i + ii].real = y1[j][i].real;
+					xout[k][j][i + ii].imag = y1[j][i].imag;
+				}
+				// memcpy((void *)(&xout[k][j][ii]), (void *)y1[j], FFTBLOCK * sizeof(dcomplex));
 #endif
 			}
 		}
@@ -559,7 +571,12 @@ static void cffts3(int is,
 					y1[k][i] = x[k][j][i + ii];
 				}
 #else
-				memcpy((void *)y1[k], (void *)(&x[k][j][ii]), FFTBLOCK * sizeof(dcomplex));
+				for (i = 0; i < FFTBLOCK; i++)
+				{
+					y1[k][i].real = x[k][j][i + ii].real;
+					y1[k][i].imag = x[k][j][i + ii].imag;
+				}
+				// memcpy((void *)y1[k], (void *)(&x[k][j][ii]), FFTBLOCK * sizeof(dcomplex));
 #endif
 			}
 			cfftz(is, logd3, d3, y1, y2);
@@ -571,7 +588,12 @@ static void cffts3(int is,
 					xout[k][j][i + ii] = y1[k][i];
 				}
 #else
-				memcpy((void *)(&xout[k][j][ii]), (void *)y1[k], FFTBLOCK * sizeof(dcomplex));
+				for (i = 0; i < FFTBLOCK; i++)
+				{
+					xout[k][j][i + ii].real = y1[k][i].real;
+					xout[k][j][i + ii].imag = y1[k][i].imag;
+				}
+				// memcpy((void *)(&xout[k][j][ii]), (void *)y1[k], FFTBLOCK * sizeof(dcomplex));
 #endif
 			}
 		}
@@ -654,7 +676,15 @@ static void cfftz(int is,
 	if (l == m)
 	{
 		fftz2(is, l, m, n, FFTBLOCK, FFTBLOCKPAD, u, x, y);
-		memcpy((void *)x, (void *)y, n * FFTBLOCK * sizeof(dcomplex));
+		for (j = 0; j < n; j++)
+		{
+			for (i = 0; i < FFTBLOCK; i++)
+			{
+				x[j][i].real = y[j][i].real;
+				x[j][i].imag = y[j][i].imag;
+			}
+		}
+		// memcpy((void *)x, (void *)y, n * FFTBLOCK * sizeof(dcomplex));
 	}
 #endif
 }
@@ -823,14 +853,14 @@ static void compute_initial_conditions(void *pointer_u0,
  */
 static void evolve(void *restrict pointer_u0,
 									 void *restrict pointer_u1,
-									 void *restrict pointer_twiddle,
+									 void const *restrict pointer_twiddle,
 									 int d1,
 									 int d2,
 									 int d3)
 {
 	dcomplex(*u0)[NY][NX] = (dcomplex(*)[NY][NX])pointer_u0;
 	dcomplex(*u1)[NY][NX] = (dcomplex(*)[NY][NX])pointer_u1;
-	double(*twiddle)[NY][NX] = (double(*)[NY][NX])pointer_twiddle;
+	double const(*twiddle)[NY][NX] = (double const(*)[NY][NX])pointer_twiddle;
 
 	int i, j, k;
 #pragma omp for
@@ -844,17 +874,22 @@ static void evolve(void *restrict pointer_u0,
 				u0[k][j][i] = dcomplex_mul2(u0[k][j][i], twiddle[k][j][i]);
 				u1[k][j][i] = u0[k][j][i];
 #else
-				u1[k][j][i].real = u0[k][j][i].real * twiddle[k][j][i];
-				u1[k][j][i].imag = u0[k][j][i].imag * twiddle[k][j][i];
+				u0[k][j][i].real *= twiddle[k][j][i];
+				u0[k][j][i].imag *= twiddle[k][j][i];
+				u1[k][j][i].real = u0[k][j][i].real;
+				u1[k][j][i].imag = u0[k][j][i].imag;
+
+				// u1[k][j][i].real = u0[k][j][i].real * twiddle[k][j][i];
+				// u1[k][j][i].imag = u0[k][j][i].imag * twiddle[k][j][i];
 				// u0[k][j][i].real = u1[k][j][i].real;
 				// u0[k][j][i].imag = u1[k][j][i].imag;
 #endif
 			}
 		}
 
-#if !defined(REF)
-		memcpy((void *)u0[k], (void *)u1[k], d1 * d2 * sizeof(dcomplex));
-#endif
+		// #if !defined(REF)
+		// 		memcpy((void *)u0[k], (void *)u1[k], d1 * d2 * sizeof(dcomplex));
+		// #endif
 	}
 }
 
@@ -951,8 +986,8 @@ static void fftz2(int is,
 									int n,
 									int ny,
 									int ny1,
-									dcomplex u[],
-									dcomplex x[][FFTBLOCKPAD],
+									dcomplex const u[],
+									dcomplex const x[][FFTBLOCKPAD],
 									dcomplex y[][FFTBLOCKPAD])
 {
 	int k, n1, li, lj, lk, ku, i, j, i11, i12, i21, i22;
@@ -969,12 +1004,14 @@ static void fftz2(int is,
 	lj = 2 * lk;
 	ku = li;
 
+	double const f = (is < 0) ? -1.0 : 1.0;
+
 	for (i = 0; i <= li - 1; i++)
 	{
-		i11 = i * lk;
-		i12 = i11 + n1;
-		i21 = i * lj;
-		i22 = i21 + lk;
+		// i11 = i * lk;
+		// i12 = i11 + n1;
+		// i21 = i * lj;
+		// i22 = i21 + lk;
 
 #if defined(REF)
 		if (is >= 1)
@@ -986,19 +1023,20 @@ static void fftz2(int is,
 			u1 = dconjg(u[ku + i]);
 		}
 #else
-		u1.real = u[ku + i].real;
-		u1.imag = u[ku + i].imag;
-		if (is < 0) /* either 1 or -1 */
-		{
-			u1.imag *= -1; /* conjugate */
-		}
+		// u1.real = u[ku + i].real;
+		// u1.imag = u[ku + i].imag;
+		// if (is < 0) /* either 1 or -1 */
+		// {
+		// 	u1.imag *= -1; /* conjugate */
+		// }
 #endif
 
-		/*
-		 * ---------------------------------------------------------------------
-		 * this loop is vectorizable.
-		 * ---------------------------------------------------------------------
-		 */
+/*
+ * ---------------------------------------------------------------------
+ * this loop is vectorizable.
+ * ---------------------------------------------------------------------
+ */
+#pragma omp simd collapse(2)
 		for (k = 0; k <= lk - 1; k++)
 		{
 			for (j = 0; j < ny; j++)
@@ -1009,17 +1047,29 @@ static void fftz2(int is,
 				y[i21 + k][j] = dcomplex_add(x11, x21);
 				y[i22 + k][j] = dcomplex_mul(u1, dcomplex_sub(x11, x21));
 #else
-				dcomplex *p_x11 = &x[i11 + k][j];
-				dcomplex *p_x21 = &x[i12 + k][j];
 
-				y[i21 + k][j].real = p_x11->real + p_x21->real;
-				y[i21 + k][j].imag = p_x11->imag + p_x21->imag;
+#if 0
+				dcomplex x11 = x[i11 + k][j];
+				dcomplex x21 = x[i12 + k][j];
+
+				y[i21 + k][j].real = x11.real + x21.real;
+				y[i21 + k][j].imag = x11.imag + x21.imag;
+
+				double x11_sub_x21_real = x11.real - x21.real;
+				double x11_sub_x21_imag = x11.imag - x21.imag;
+#else
+				dcomplex const *p_x11 = &x[i * lk + k][j];
+				dcomplex const *p_x21 = &x[i * lk + n1 + k][j];
+
+				y[i * lj + k][j].real = p_x11->real + p_x21->real;
+				y[i * lj + k][j].imag = p_x11->imag + p_x21->imag;
 
 				double x11_sub_x21_real = p_x11->real - p_x21->real;
 				double x11_sub_x21_imag = p_x11->imag - p_x21->imag;
+#endif
 
-				y[i22 + k][j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
-				y[i22 + k][j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
+				y[i * lj + lk + k][j].real = u[ku + i].real * x11_sub_x21_real - f * u[ku + i].imag * x11_sub_x21_imag;
+				y[i * lj + lk + k][j].imag = u[ku + i].real * x11_sub_x21_imag + f * u[ku + i].imag * x11_sub_x21_real;
 #endif
 			}
 		}
