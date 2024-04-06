@@ -1004,14 +1004,12 @@ static void fftz2(int is,
 	lj = 2 * lk;
 	ku = li;
 
-	double const f = (is < 0) ? -1.0 : 1.0;
-
 	for (i = 0; i <= li - 1; i++)
 	{
-		// i11 = i * lk;
-		// i12 = i11 + n1;
-		// i21 = i * lj;
-		// i22 = i21 + lk;
+		i11 = i * lk;
+		i12 = i11 + n1;
+		i21 = i * lj;
+		i22 = i21 + lk;
 
 #if defined(REF)
 		if (is >= 1)
@@ -1023,20 +1021,19 @@ static void fftz2(int is,
 			u1 = dconjg(u[ku + i]);
 		}
 #else
-		// u1.real = u[ku + i].real;
-		// u1.imag = u[ku + i].imag;
-		// if (is < 0) /* either 1 or -1 */
-		// {
-		// 	u1.imag *= -1; /* conjugate */
-		// }
+		u1.real = u[ku + i].real;
+		u1.imag = u[ku + i].imag;
+		if (is < 0) /* either 1 or -1 */
+		{
+			u1.imag *= -1; /* conjugate */
+		}
 #endif
 
-/*
- * ---------------------------------------------------------------------
- * this loop is vectorizable.
- * ---------------------------------------------------------------------
- */
-#pragma omp simd collapse(2)
+		/*
+		 * ---------------------------------------------------------------------
+		 * this loop is vectorizable.
+		 * ---------------------------------------------------------------------
+		 */
 		for (k = 0; k <= lk - 1; k++)
 		{
 			for (j = 0; j < ny; j++)
@@ -1047,29 +1044,17 @@ static void fftz2(int is,
 				y[i21 + k][j] = dcomplex_add(x11, x21);
 				y[i22 + k][j] = dcomplex_mul(u1, dcomplex_sub(x11, x21));
 #else
+				dcomplex *p_x11 = &x[i11 + k][j];
+				dcomplex *p_x21 = &x[i12 + k][j];
 
-#if 0
-				dcomplex x11 = x[i11 + k][j];
-				dcomplex x21 = x[i12 + k][j];
-
-				y[i21 + k][j].real = x11.real + x21.real;
-				y[i21 + k][j].imag = x11.imag + x21.imag;
-
-				double x11_sub_x21_real = x11.real - x21.real;
-				double x11_sub_x21_imag = x11.imag - x21.imag;
-#else
-				dcomplex const *p_x11 = &x[i * lk + k][j];
-				dcomplex const *p_x21 = &x[i * lk + n1 + k][j];
-
-				y[i * lj + k][j].real = p_x11->real + p_x21->real;
-				y[i * lj + k][j].imag = p_x11->imag + p_x21->imag;
+				y[i21 + k][j].real = p_x11->real + p_x21->real;
+				y[i21 + k][j].imag = p_x11->imag + p_x21->imag;
 
 				double x11_sub_x21_real = p_x11->real - p_x21->real;
 				double x11_sub_x21_imag = p_x11->imag - p_x21->imag;
-#endif
 
-				y[i * lj + lk + k][j].real = u[ku + i].real * x11_sub_x21_real - f * u[ku + i].imag * x11_sub_x21_imag;
-				y[i * lj + lk + k][j].imag = u[ku + i].real * x11_sub_x21_imag + f * u[ku + i].imag * x11_sub_x21_real;
+				y[i22 + k][j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
+				y[i22 + k][j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
 #endif
 			}
 		}
