@@ -601,25 +601,28 @@ static void cfftz(int is,
 {
 	int i, j, l, mx;
 
+#if 0
 	/*
 	 * ---------------------------------------------------------------------
 	 * check if input parameters are invalid.
 	 * ---------------------------------------------------------------------
 	 */
-	// mx = (int)(u[0].real);
-	// if ((is != 1 && is != -1) || m < 1 || m > mx)
-	// {
-	// 	printf("CFFTZ: Either U has not been initialized, or else\n"
-	// 				 "one of the input parameters is invalid%5d%5d%5d\n",
-	// 				 is, m, mx);
-	// 	exit(EXIT_FAILURE);
-	// }
+	mx = (int)(u[0].real);
+	if ((is != 1 && is != -1) || m < 1 || m > mx)
+	{
+		printf("CFFTZ: Either U has not been initialized, or else\n"
+					 "one of the input parameters is invalid%5d%5d%5d\n",
+					 is, m, mx);
+		exit(EXIT_FAILURE);
+	}
+#endif
 
 	/*
 	 * ---------------------------------------------------------------------
 	 * perform one variant of the Stockham FFT.
 	 * ---------------------------------------------------------------------
 	 */
+#if defined(REF)
 	for (l = 1; l <= m; l += 2)
 	{
 		fftz2(is, l, m, n, FFTBLOCK, FFTBLOCKPAD, u, x, y);
@@ -630,7 +633,6 @@ static void cfftz(int is,
 			 * copy Y to X.
 			 * ---------------------------------------------------------------------
 			 */
-#if defined(REF)
 			for (j = 0; j < n; j++)
 			{
 				for (i = 0; i < FFTBLOCK; i++)
@@ -638,13 +640,23 @@ static void cfftz(int is,
 					x[j][i] = y[j][i];
 				}
 			}
-#else
-			memcpy((void *)x, (void *)y, n * FFTBLOCK * sizeof(dcomplex));
-#endif
 			break;
 		}
 		fftz2(is, l + 1, m, n, FFTBLOCK, FFTBLOCKPAD, u, y, x);
 	}
+#else
+	for (l = 1; l < m; l += 2)
+	{
+		fftz2(is, l, m, n, FFTBLOCK, FFTBLOCKPAD, u, x, y);
+		fftz2(is, l + 1, m, n, FFTBLOCK, FFTBLOCKPAD, u, y, x);
+	}
+
+	if (l == m)
+	{
+		fftz2(is, l, m, n, FFTBLOCK, FFTBLOCKPAD, u, x, y);
+		memcpy((void *)x, (void *)y, n * FFTBLOCK * sizeof(dcomplex));
+	}
+#endif
 }
 
 static void checksum(int i,
@@ -834,15 +846,15 @@ static void evolve(void *restrict pointer_u0,
 #else
 				u1[k][j][i].real = u0[k][j][i].real * twiddle[k][j][i];
 				u1[k][j][i].imag = u0[k][j][i].imag * twiddle[k][j][i];
-				u0[k][j][i].real = u1[k][j][i].real;
-				u0[k][j][i].imag = u1[k][j][i].imag;
+				// u0[k][j][i].real = u1[k][j][i].real;
+				// u0[k][j][i].imag = u1[k][j][i].imag;
 #endif
 			}
 		}
 
-		// #if !defined(REF)
-		// 		memcpy((void *)u0[k], (void *)u1[k], d1 * d2 * sizeof(dcomplex));
-		// #endif
+#if !defined(REF)
+		memcpy((void *)u0[k], (void *)u1[k], d1 * d2 * sizeof(dcomplex));
+#endif
 	}
 }
 
