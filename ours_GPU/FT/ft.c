@@ -730,40 +730,23 @@ static void checksum(int i,
 		sums[i] = chk;
 	}
 #else
-	double chk_worker_real, chk_worker_imag;
+	double chk_worker[2] = {0.0, 0.0};
 
-	// #pragma omp single
-	{
-		chk_worker_real = 0.0;
-		chk_worker_imag = 0.0;
-	}
-// TODO: merge to one loop
-#pragma omp target teams distribute parallel for reduction(+ : chk_worker_real) map(tofrom : chk_worker_real)
+#pragma omp target teams distribute parallel for reduction(+ : chk_worker[0 : 2]) map(tofrom : chk_worker[0 : 2])
 	for (j = 1; j <= 1024; j++)
 	{
 		q = j % NX;
 		r = (3 * j) % NY;
 		s = (5 * j) % NZ;
-		chk_worker_real += u1[s][r][q].real;
+		chk_worker[0] += u1[s][r][q].real;
+		chk_worker[1] += u1[s][r][q].imag;
 	}
 
-#pragma omp target teams distribute parallel for reduction(+ : chk_worker_imag) map(tofrom : chk_worker_imag)
-	for (j = 1; j <= 1024; j++)
-	{
-		q = j % NX;
-		r = (3 * j) % NY;
-		s = (5 * j) % NZ;
-		chk_worker_imag += u1[s][r][q].imag;
-	}
-
-	// #pragma omp single
-	{
-		chk_worker_real /= (double)(NTOTAL);
-		chk_worker_imag /= (double)(NTOTAL);
-		printf(" T =%5d     Checksum =%22.12e%22.12e\n", i, chk_worker_real, chk_worker_imag);
-		sums[i].real = chk_worker_real;
-		sums[i].imag = chk_worker_imag;
-	}
+	double chk_worker_real = chk_worker[0] / (double)(NTOTAL);
+	double chk_worker_imag = chk_worker[1] / (double)(NTOTAL);
+	printf(" T =%5d     Checksum =%22.12e%22.12e\n", i, chk_worker_real, chk_worker_imag);
+	sums[i].real = chk_worker_real;
+	sums[i].imag = chk_worker_imag;
 #endif
 }
 
