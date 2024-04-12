@@ -254,7 +254,7 @@ int main(int argc, char **argv)
 	}
 #endif
 	setup();
-	init_ui(u0, u1, twiddle);
+	// init_ui(u0, u1, twiddle);
 	// 	compute_indexmap(twiddle);
 	// 	compute_initial_conditions(u1);
 	// 	fft_init(MAXDIM);
