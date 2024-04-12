@@ -289,6 +289,7 @@ int main(int argc, char **argv)
 	{
 
 // Do all 3 init steps in parallel
+// FIXME: I think task is not doing anything if it's not inside a parallel pragma ???
 #pragma omp task
 		compute_indexmap(twiddle);
 
