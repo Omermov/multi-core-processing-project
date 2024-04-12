@@ -35,9 +35,13 @@
 *.out
 *.app
 
-ours/bin/**
-ours/FT/npbparams.h
-ours/sys/setparams
+ours_CPU/bin/**
+ours_CPU/FT/npbparams.h
+ours_CPU/sys/setparams
+
+ours_GPU/bin/**
+ours_GPU/FT/npbparams.h
+ours_GPU/sys/setparams
 
 reference/bin/**
 reference/FT/npbparams.hpp
