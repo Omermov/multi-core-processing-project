@@ -440,11 +440,26 @@ static void cffts1(int is,
 		}
 	}
 
-#pragma omp target teams distribute parallel for simd
+#if 0
+#pragma omp parallel
+	{
+#pragma omp single nowait
+		{
+			for (k = 0; k < NZ; k++)
+			{
+#pragma omp task firstprivate(k)
+				{
+					cfftz(is, logd1, NX, NY, u, y1[k], y2[k]);
+				}
+			}
+		} /* end of single */
+	}		/* end of parallel */
+#else
 	for (k = 0; k < NZ; k++)
 	{
 		cfftz(is, logd1, NX, NY, u, y1[k], y2[k]);
 	}
+#endif
 
 #pragma omp target teams distribute parallel for simd collapse(3)
 	for (k = 0; k < NZ; k++)
@@ -507,11 +522,24 @@ static void cffts2(int is,
 		}
 	}
 
-#pragma omp target teams distribute parallel for simd
+#if 0
+#pragma omp parallel
+	{
+#pragma omp single nowait
+		{
+			for (k = 0; k < NZ; k++)
+			{
+#pragma omp task firstprivate(k)
+				cfftz(is, logd2, NY, NX, u, y1[k], y2[k]);
+			}
+		} /* end of single */
+	}		/* end of parallel */
+#else
 	for (k = 0; k < NZ; k++)
 	{
 		cfftz(is, logd2, NY, NX, u, y1[k], y2[k]);
 	}
+#endif
 
 #pragma omp target teams distribute parallel for simd collapse(3)
 	for (k = 0; k < NZ; k++)
@@ -578,11 +606,24 @@ static void cffts3(int is,
 		}
 	}
 
-#pragma omp target teams distribute parallel for simd
+#if 0
+#pragma omp parallel
+	{
+#pragma omp single nowait
+		{
+			for (j = 0; j < NY; j++)
+			{
+#pragma omp task firstprivate(j)
+				cfftz(is, logd3, NZ, NX, u, y1[j], y2[j]);
+			}
+		} /* end of single */
+	}		/* end of parallel */
+#else
 	for (j = 0; j < NY; j++)
 	{
 		cfftz(is, logd3, NZ, NX, u, y1[j], y2[j]);
 	}
+#endif
 
 #pragma omp target teams distribute parallel for simd collapse(3)
 	for (j = 0; j < NY; j++)
@@ -663,6 +704,7 @@ static void cfftz(int is,
 			 * copy Y to X.
 			 * ---------------------------------------------------------------------
 			 */
+#pragma omp target teams distribute parallel for simd collapse(2)
 			for (j = 0; j < n; j++)
 			{
 				for (i = 0; i < o; i++)
@@ -684,6 +726,8 @@ static void cfftz(int is,
 	if (l == m)
 	{
 		fftz2(is, l, m, n, o, u, x, y);
+
+#pragma omp target teams distribute parallel for simd collapse(2)
 		for (j = 0; j < n; j++)
 		{
 			for (i = 0; i < o; i++)
@@ -692,7 +736,6 @@ static void cfftz(int is,
 				x[j][i].imag = y[j][i].imag;
 			}
 		}
-		// memcpy((void *)x, (void *)y, n * o * sizeof(dcomplex));
 	}
 #endif
 }
@@ -990,12 +1033,15 @@ static void fftz2(int is,
 	lj = 2 * lk;
 	ku = li;
 
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (i = 0; i <= li - 1; i++)
 	{
+#if defined(REF)
 		i11 = i * lk;
 		i12 = i11 + n1;
 		i21 = i * lj;
 		i22 = i21 + lk;
+#endif
 
 #if defined(REF)
 		if (is >= 1)
@@ -1029,17 +1075,17 @@ static void fftz2(int is,
 				y[i21 + k][j] = dcomplex_add(x11, x21);
 				y[i22 + k][j] = dcomplex_mul(u1, dcomplex_sub(x11, x21));
 #else
-				dcomplex const *p_x11 = &x[i11 + k][j];
-				dcomplex const *p_x21 = &x[i12 + k][j];
+				dcomplex const *p_x11 = &x[i * lk + k][j];
+				dcomplex const *p_x21 = &x[i * lk + n1 + k][j];
 
-				y[i21 + k][j].real = p_x11->real + p_x21->real;
-				y[i21 + k][j].imag = p_x11->imag + p_x21->imag;
+				y[i * lj + k][j].real = p_x11->real + p_x21->real;
+				y[i * lj + k][j].imag = p_x11->imag + p_x21->imag;
 
 				double x11_sub_x21_real = p_x11->real - p_x21->real;
 				double x11_sub_x21_imag = p_x11->imag - p_x21->imag;
 
-				y[i22 + k][j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
-				y[i22 + k][j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
+				y[i * lj + lk + k][j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
+				y[i * lj + lk + k][j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
 #endif
 			}
 		}
