@@ -455,6 +455,7 @@ static void cffts1(int is,
 		} /* end of single */
 	}		/* end of parallel */
 #else
+#pragma omp parallel for
 	for (k = 0; k < NZ; k++)
 	{
 		cfftz(is, logd1, NX, NY, u, (dcomplex *)y1[k], (dcomplex *)y2[k]);
@@ -535,6 +536,7 @@ static void cffts2(int is,
 		} /* end of single */
 	}		/* end of parallel */
 #else
+#pragma omp parallel for
 	for (k = 0; k < NZ; k++)
 	{
 		cfftz(is, logd2, NY, NX, u, (dcomplex *)y1[k], (dcomplex *)y2[k]);
@@ -619,6 +621,7 @@ static void cffts3(int is,
 		} /* end of single */
 	}		/* end of parallel */
 #else
+#pragma omp parallel for
 	for (j = 0; j < NY; j++)
 	{
 		cfftz(is, logd3, NZ, NX, u, (dcomplex *)y1[j], (dcomplex *)y2[j]);
@@ -672,12 +675,12 @@ static void cfftz(int is,
 {
 	int i, j, l, mx;
 
-#if 0
 	/*
 	 * ---------------------------------------------------------------------
 	 * check if input parameters are invalid.
 	 * ---------------------------------------------------------------------
 	 */
+	/*
 	mx = (int)(u[0].real);
 	if ((is != 1 && is != -1) || m < 1 || m > mx)
 	{
@@ -686,7 +689,7 @@ static void cfftz(int is,
 					 is, m, mx);
 		exit(EXIT_FAILURE);
 	}
-#endif
+	*/
 
 	/*
 	 * ---------------------------------------------------------------------
