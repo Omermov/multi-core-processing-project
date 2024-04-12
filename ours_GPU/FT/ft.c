@@ -449,7 +449,7 @@ static void cffts1(int is,
 			{
 #pragma omp task firstprivate(k)
 				{
-					cfftz(is, logd1, NX, NY, u, y1[k], y2[k]);
+					cfftz(is, logd1, NX, NY, u, (dcomplex *)y1[k], (dcomplex *)y2[k]);
 				}
 			}
 		} /* end of single */
@@ -457,7 +457,7 @@ static void cffts1(int is,
 #else
 	for (k = 0; k < NZ; k++)
 	{
-		cfftz(is, logd1, NX, NY, u, (dcomplex *)(y1[k]), (dcomplex *)(y2[k]));
+		cfftz(is, logd1, NX, NY, u, (dcomplex *)y1[k], (dcomplex *)y2[k]);
 	}
 #endif
 
@@ -530,14 +530,14 @@ static void cffts2(int is,
 			for (k = 0; k < NZ; k++)
 			{
 #pragma omp task firstprivate(k)
-				cfftz(is, logd2, NY, NX, u, y1[k], y2[k]);
+				cfftz(is, logd2, NY, NX, u, (dcomplex *)y1[k], (dcomplex *)y2[k]);
 			}
 		} /* end of single */
 	}		/* end of parallel */
 #else
 	for (k = 0; k < NZ; k++)
 	{
-		cfftz(is, logd2, NY, NX, u, (dcomplex *)(y1[k]), (dcomplex *)(y2[k]));
+		cfftz(is, logd2, NY, NX, u, (dcomplex *)y1[k], (dcomplex *)y2[k]);
 	}
 #endif
 
@@ -614,14 +614,14 @@ static void cffts3(int is,
 			for (j = 0; j < NY; j++)
 			{
 #pragma omp task firstprivate(j)
-				cfftz(is, logd3, NZ, NX, u, y1[j], y2[j]);
+				cfftz(is, logd3, NZ, NX, u, (dcomplex *)y1[j], (dcomplex *)y2[j]);
 			}
 		} /* end of single */
 	}		/* end of parallel */
 #else
 	for (j = 0; j < NY; j++)
 	{
-		cfftz(is, logd3, NZ, NX, u, (dcomplex *)(y1[j]), (dcomplex *)(y2[j]));
+		cfftz(is, logd3, NZ, NX, u, (dcomplex *)y1[j], (dcomplex *)y2[j]);
 	}
 #endif
 
