@@ -845,7 +845,7 @@ static void compute_initial_conditions(dcomplex u0[NZ][NY][NX])
  * go through by z planes filling in one square at a time.
  * ---------------------------------------------------------------------
  */
-// TODO: why collapse doesn't work ??
+// NOTE: Only outer loop can be run in parallel
 #pragma omp target teams distribute parallel for simd private(k, j, x0) map(to : starts[0 : NZ])
 	for (k = 0; k < NZ; k++)
 	{
