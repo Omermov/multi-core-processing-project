@@ -1044,8 +1044,8 @@ static void fftz2(int is,
 				y[i21 + k][j] = dcomplex_add(x11, x21);
 				y[i22 + k][j] = dcomplex_mul(u1, dcomplex_sub(x11, x21));
 #else
-				dcomplex *p_x11 = &x[i11 + k][j];
-				dcomplex *p_x21 = &x[i12 + k][j];
+				dcomplex const *p_x11 = &x[i11 + k][j];
+				dcomplex const *p_x21 = &x[i12 + k][j];
 
 				y[i21 + k][j].real = p_x11->real + p_x21->real;
 				y[i21 + k][j].imag = p_x11->imag + p_x21->imag;
