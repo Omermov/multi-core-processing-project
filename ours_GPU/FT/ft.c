@@ -12,7 +12,7 @@ of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
 to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
 copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+furnished to do sny, subject to the following conditions:
 
 The above copyright notice and this permission notice shall be included in all
 copies or substantial portions of the Software.
@@ -179,10 +179,10 @@ static void cffts3(int is,
 static void cfftz(int is,
 									int m,
 									int n,
-									int o,
+									int ny,
 									dcomplex const u[MAXDIM],
-									dcomplex x[MAXDIM][MAXDIM],
-									dcomplex y[MAXDIM][MAXDIM]);
+									dcomplex x[],
+									dcomplex y[]);
 static void checksum(int i,
 										 dcomplex u1[NZ][NY][NX],
 										 dcomplex sums[NITER_DEFAULT + 1]);
@@ -204,8 +204,8 @@ static void fftz2(int is,
 									int n,
 									int ny,
 									dcomplex const u[MAXDIM],
-									dcomplex const x[MAXDIM][MAXDIM],
-									dcomplex y[MAXDIM][MAXDIM]);
+									dcomplex const x[],
+									dcomplex y[]);
 static int ilog2(int n);
 static void init_ui(dcomplex u0[NZ][NY][NX],
 										dcomplex u1[NZ][NY][NX],
@@ -457,7 +457,7 @@ static void cffts1(int is,
 #else
 	for (k = 0; k < NZ; k++)
 	{
-		cfftz(is, logd1, NX, NY, u, y1[k], y2[k]);
+		cfftz(is, logd1, NX, NY, u, (dcomplex *)(y1[k]), (dcomplex *)(y2[k]));
 	}
 #endif
 
@@ -537,7 +537,7 @@ static void cffts2(int is,
 #else
 	for (k = 0; k < NZ; k++)
 	{
-		cfftz(is, logd2, NY, NX, u, y1[k], y2[k]);
+		cfftz(is, logd2, NY, NX, u, (dcomplex *)(y1[k]), (dcomplex *)(y2[k]));
 	}
 #endif
 
@@ -621,7 +621,7 @@ static void cffts3(int is,
 #else
 	for (j = 0; j < NY; j++)
 	{
-		cfftz(is, logd3, NZ, NX, u, y1[j], y2[j]);
+		cfftz(is, logd3, NZ, NX, u, (dcomplex *)(y1[j]), (dcomplex *)(y2[j]));
 	}
 #endif
 
@@ -665,10 +665,10 @@ static void cffts3(int is,
 static void cfftz(int is,
 									int m,
 									int n,
-									int o,
+									int ny,
 									dcomplex const u[MAXDIM],
-									dcomplex x[MAXDIM][MAXDIM],
-									dcomplex y[MAXDIM][MAXDIM])
+									dcomplex x[],
+									dcomplex y[])
 {
 	int i, j, l, mx;
 
@@ -696,7 +696,7 @@ static void cfftz(int is,
 #if defined(REF)
 	for (l = 1; l <= m; l += 2)
 	{
-		fftz2(is, l, m, n, o, u, x, y);
+		fftz2(is, l, m, n, ny, u, x, y);
 		if (l == m)
 		{
 			/*
@@ -707,33 +707,33 @@ static void cfftz(int is,
 #pragma omp target teams distribute parallel for simd collapse(2)
 			for (j = 0; j < n; j++)
 			{
-				for (i = 0; i < o; i++)
+				for (i = 0; i < ny; i++)
 				{
 					x[j][i] = y[j][i];
 				}
 			}
 			break;
 		}
-		fftz2(is, l + 1, m, n, o, u, y, x);
+		fftz2(is, l + 1, m, n, ny, u, y, x);
 	}
 #else
 	for (l = 1; l < m; l += 2)
 	{
-		fftz2(is, l, m, n, o, u, x, y);
-		fftz2(is, l + 1, m, n, o, u, y, x);
+		fftz2(is, l, m, n, ny, u, x, y);
+		fftz2(is, l + 1, m, n, ny, u, y, x);
 	}
 
 	if (l == m)
 	{
-		fftz2(is, l, m, n, o, u, x, y);
+		fftz2(is, l, m, n, ny, u, x, y);
 
 #pragma omp target teams distribute parallel for simd collapse(2)
 		for (j = 0; j < n; j++)
 		{
-			for (i = 0; i < o; i++)
+			for (i = 0; i < ny; i++)
 			{
-				x[j][i].real = y[j][i].real;
-				x[j][i].imag = y[j][i].imag;
+				x[j * ny + i].real = y[j * ny + i].real;
+				x[j * ny + i].imag = y[j * ny + i].imag;
 			}
 		}
 	}
@@ -1016,8 +1016,8 @@ static void fftz2(int is,
 									int n,
 									int ny,
 									dcomplex const u[MAXDIM],
-									dcomplex const x[MAXDIM][MAXDIM],
-									dcomplex y[MAXDIM][MAXDIM])
+									dcomplex const x[],
+									dcomplex y[])
 {
 	int k, n1, li, lj, lk, ku, i, j, i11, i12, i21, i22;
 	dcomplex u1;
@@ -1075,17 +1075,17 @@ static void fftz2(int is,
 				y[i21 + k][j] = dcomplex_add(x11, x21);
 				y[i22 + k][j] = dcomplex_mul(u1, dcomplex_sub(x11, x21));
 #else
-				dcomplex const *p_x11 = &x[i * lk + k][j];
-				dcomplex const *p_x21 = &x[i * lk + n1 + k][j];
+				dcomplex const *p_x11 = &x[(i * lk + k) * ny + j];
+				dcomplex const *p_x21 = &x[(i * lk + n1 + k) * ny + j];
 
-				y[i * lj + k][j].real = p_x11->real + p_x21->real;
-				y[i * lj + k][j].imag = p_x11->imag + p_x21->imag;
+				y[(i * lj + k) * ny + j].real = p_x11->real + p_x21->real;
+				y[(i * lj + k) * ny + j].imag = p_x11->imag + p_x21->imag;
 
 				double x11_sub_x21_real = p_x11->real - p_x21->real;
 				double x11_sub_x21_imag = p_x11->imag - p_x21->imag;
 
-				y[i * lj + lk + k][j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
-				y[i * lj + lk + k][j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
+				y[(i * lj + lk + k) * ny + j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
+				y[(i * lj + lk + k) * ny + j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
 #endif
 			}
 		}
