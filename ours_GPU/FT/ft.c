@@ -423,7 +423,7 @@ static void cffts1(int is,
 	timer_start(T_FFTX);
 #endif
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -440,13 +440,13 @@ static void cffts1(int is,
 		}
 	}
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd
 	for (k = 0; k < NZ; k++)
 	{
 		cfftz(is, logd1, NX, NY, u, y1[k], y2[k]);
 	}
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -486,7 +486,7 @@ static void cffts2(int is,
 	timer_start(T_FFTY);
 #endif
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -507,13 +507,13 @@ static void cffts2(int is,
 		}
 	}
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd
 	for (k = 0; k < NZ; k++)
 	{
 		cfftz(is, logd2, NY, NX, u, y1[k], y2[k]);
 	}
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -521,7 +521,7 @@ static void cffts2(int is,
 #if defined(REF)
 			for (i = 0; i < NX; i++)
 			{
-				xout[k][j][i] = y1[j][i];
+				xout[k][j][i] = y1[k][j][i];
 			}
 #else
 			for (i = 0; i < NX; i++)
@@ -557,7 +557,7 @@ static void cffts3(int is,
 	timer_start(T_FFTZ);
 #endif
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (j = 0; j < NY; j++)
 	{
 		for (k = 0; k < NZ; k++)
@@ -578,13 +578,13 @@ static void cffts3(int is,
 		}
 	}
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd
 	for (j = 0; j < NY; j++)
 	{
 		cfftz(is, logd3, NZ, NX, u, y1[j], y2[j]);
 	}
 
-#pragma omp target teams distribute parallel for
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (j = 0; j < NY; j++)
 	{
 		for (k = 0; k < NZ; k++)
@@ -703,33 +703,6 @@ static void checksum(int i,
 {
 
 	int j, q, r, s;
-#if defined(REF)
-	dcomplex chk_worker = dcomplex_create(0.0, 0.0);
-	static dcomplex chk;
-
-#pragma omp single
-	chk = dcomplex_create(0.0, 0.0);
-
-#pragma omp for
-	for (j = 1; j <= 1024; j++)
-	{
-		q = j % NX;
-		r = (3 * j) % NY;
-		s = (5 * j) % NZ;
-		chk_worker = dcomplex_add(chk_worker, u1[s][r][q]);
-	}
-
-#pragma omp critical
-	chk = dcomplex_add(chk, chk_worker);
-
-#pragma omp barrier
-#pragma omp single
-	{
-		chk = dcomplex_div2(chk, (double)(NTOTAL));
-		printf(" T =%5d     Checksum =%22.12e%22.12e\n", i, chk.real, chk.imag);
-		sums[i] = chk;
-	}
-#else
 	double chk_worker[2] = {0.0, 0.0};
 
 #pragma omp target teams distribute parallel for reduction(+ : chk_worker[0 : 2]) map(tofrom : chk_worker[0 : 2])
@@ -747,7 +720,6 @@ static void checksum(int i,
 	printf(" T =%5d     Checksum =%22.12e%22.12e\n", i, chk_worker_real, chk_worker_imag);
 	sums[i].real = chk_worker_real;
 	sums[i].imag = chk_worker_imag;
-#endif
 }
 
 #define r23 (0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5)
@@ -892,7 +864,7 @@ static void evolve(dcomplex u0[NZ][NY][NX],
 									 double const twiddle[NZ][NY][NX])
 {
 	int i, j, k;
-#pragma omp target teams distribute parallel for collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -915,10 +887,6 @@ static void evolve(dcomplex u0[NZ][NY][NX],
 #endif
 			}
 		}
-
-		// #if !defined(REF)
-		// 		memcpy((void *)u0[k], (void *)u1[k], NX * NY * sizeof(dcomplex));
-		// #endif
 	}
 }
 
@@ -1039,8 +1007,11 @@ static void fftz2(int is,
 			u1 = dconjg(u[ku + i]);
 		}
 #else
-		u1.real = u[ku + i].real;
-		u1.imag = u[ku + i].imag * (is < 0 ? -1.0 : 1.0);
+		u1 = u[ku + i];
+		if (is < 0)
+		{
+			u1.imag *= -1;
+		}
 #endif
 
 		/*
