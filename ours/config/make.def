@@ -27,7 +27,8 @@
 #---------------------------------------------------------------------------
 # This is the C compiler used for OpenMP programs
 #---------------------------------------------------------------------------
-CC = g++ -std=c++14 -g -mavx512vl
+# CC = g++ -std=c++14 -g -mavx512vl
+CC = icx
 
 
 # This links C programs; usually the same as ${CC}
@@ -37,26 +38,30 @@ CLINK	= $(CC)
 #---------------------------------------------------------------------------
 # These macros are passed to the linker
 #---------------------------------------------------------------------------
-C_LIB  = -lm
-
+C_LIB  = -lpthread -littnotify -L/opt/intel/oneapi/vtune/2024.1/sdk/lib64
 
 #---------------------------------------------------------------------------
 # These macros are passed to the compiler
 #---------------------------------------------------------------------------
-C_INC = -I../common
+C_INC = -I../common -I/opt/intel/oneapi/vtune/2024.1/sdk/include
 
 
 #---------------------------------------------------------------------------
 # Global *compile time* flags for C programs
 #---------------------------------------------------------------------------
-CFLAGS	= -O3 -fopenmp -mcmodel=medium
-
+CFLAGS = -xCORE-AVX512 -Ofast -fiopenmp -ipo
+CFLAGS += -qopt-mem-layout-trans=4 -mprefer-vector-width=512
+CFLAGS += -fopenmp-targets=spir64 # Required for offloading
+CFLAGS += -qopt-report=max # Add report files
+CFLAGS += -g -gline-tables-only -fdebug-info-for-profiling # Debug flags
+# CFLAGS += -DREF
+# CFLAGS += -DTIMERS_ENABLED
 
 #---------------------------------------------------------------------------
 # Global *link time* flags. Flags for increasing maximum executable
 # size usually go here.
 #---------------------------------------------------------------------------
-CLINKFLAGS = -O3 -fopenmp -mcmodel=medium
+CLINKFLAGS = $(CFLAGS)
 
 
 #---------------------------------------------------------------------------
@@ -66,7 +71,7 @@ CLINKFLAGS = -O3 -fopenmp -mcmodel=medium
 # this compiler go here also; typically there are few flags required; hence
 # there are no separate macros provided for such flags.
 #---------------------------------------------------------------------------
-UCC	= g++ -fopenmp
+UCC	= g++ -g -fopenmp
 
 
 #---------------------------------------------------------------------------
@@ -92,7 +97,7 @@ RAND   = randdp
 # For most machines,       use wtime.c
 # For SGI power challenge: use wtime_sgi64.c
 #---------------------------------------------------------------------------
-WTIME  = wtime.cpp
+WTIME  = wtime.c
 
 
 #---------------------------------------------------------------------------
