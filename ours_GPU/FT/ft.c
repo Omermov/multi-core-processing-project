@@ -303,12 +303,6 @@ int main(int argc, char **argv)
 #pragma omp task
 		{
 			compute_initial_conditions(u1);
-
-			// #pragma omp target teams distribute parallel for simd
-			// 			for (int i = 0; i < 2 * NTOTAL; i++)
-			// 			{
-			// 				((double *)u0)[i] = ((double *)u1)[i];
-			// 			}
 		}
 
 #pragma omp task
