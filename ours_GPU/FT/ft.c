@@ -157,6 +157,10 @@ static dcomplex(*yy1);
 static dcomplex(*yy2);
 #endif
 
+static int logd1;
+static int logd2;
+static int logd3;
+
 /* function prototypes */
 static void cffts1(int is,
 									 dcomplex const u[MAXDIM],
@@ -969,10 +973,6 @@ static void fft(dcomplex const u[MAXDIM],
 	// cfftz (3)
 	// yzx -> zyx
 
-	int logd1 = ilog2(NX);
-	int logd2 = ilog2(NY);
-	int logd3 = ilog2(NZ);
-
 // zyx -> zxy
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
 	for (int k = 0; k < NZ; k++)
@@ -1069,10 +1069,6 @@ static void ifft(dcomplex const u[MAXDIM],
 	// zyx -> zxy
 	// cfftz (1)
 	// zxy -> zyx
-
-	int logd1 = ilog2(NX);
-	int logd2 = ilog2(NY);
-	int logd3 = ilog2(NZ);
 
 // zyx -> yzx
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
@@ -1413,6 +1409,10 @@ static void setup(void)
 	printf(" Size                : %4dx%4dx%4d\n", NX, NY, NZ);
 	printf(" Iterations                  :%7d\n", NITER_DEFAULT);
 	printf("\n");
+
+	logd1 = ilog2(NX);
+	logd2 = ilog2(NY);
+	logd3 = ilog2(NZ);
 
 	/*
 	 * ---------------------------------------------------------------------
