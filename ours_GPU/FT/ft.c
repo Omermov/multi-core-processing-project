@@ -303,6 +303,8 @@ int main(int argc, char **argv)
 #pragma omp task
 		{
 			compute_initial_conditions(u1);
+
+#pragma omp target update to(u1[0 : NZ][0 : NY][0 : NX])
 		}
 
 #pragma omp task
@@ -852,7 +854,7 @@ static void compute_initial_conditions(dcomplex u0[NZ][NY][NX])
  * ---------------------------------------------------------------------
  */
 // NOTE: Only outer loop can be run in parallel
-#pragma omp target teams distribute parallel for simd private(k, j, x0) map(to : starts[0 : NZ])
+#pragma omp parallel for
 	for (k = 0; k < NZ; k++)
 	{
 		x0 = starts[k];
