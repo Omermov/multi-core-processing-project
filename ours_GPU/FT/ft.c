@@ -176,10 +176,10 @@ static void cffts3(int is,
 									 dcomplex xout[NZ][NY][NX],
 									 dcomplex y1[NY][NZ][NX],
 									 dcomplex y2[NY][NZ][NX]);
-static void cfftz(int is,
-									int m,
-									int n,
-									int ny,
+static void cfftz(int const is,
+									int const m,
+									int const n,
+									int const ny,
 									dcomplex const u[MAXDIM],
 									dcomplex x[],
 									dcomplex y[]);
@@ -197,6 +197,9 @@ static void fft(int dir,
 								dcomplex xout[NZ][NY][NX],
 								dcomplex y1[NTOTAL],
 								dcomplex y2[NTOTAL]);
+static void ifft(dcomplex const u[MAXDIM],
+								 dcomplex x[NTOTAL],
+								 dcomplex y[NTOTAL]);
 static void fft_init(int n);
 static void fftz2(int is,
 									int l,
@@ -222,6 +225,10 @@ static void verify(int nt,
 /* ft */
 int main(int argc, char **argv)
 {
+	setenv("OverrideDefaultFP64Settings", "1", 1);
+	setenv("IGC_EnableDPEmulation", "1", 1);
+	setenv("OMP_TARGET_OFFLOAD", "MANDATORY", 1);
+
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
 	printf(" DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION mode on\n");
 #else
@@ -340,7 +347,8 @@ int main(int argc, char **argv)
 				timer_start(T_FFT);
 			}
 #endif
-			fft(-1, u, u1, u1, yy1, yy2);
+
+			ifft(u, (dcomplex *)u1, yy1);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -377,7 +385,7 @@ int main(int argc, char **argv)
 	{
 		mflops = 0.0;
 	}
-	setenv("OMP_NUM_THREADS", "1", 0);
+
 	c_print_results((char *)"FT",
 									class_npb,
 									NX,
@@ -666,10 +674,10 @@ static void cffts3(int is,
  * subsequent call.
  * ---------------------------------------------------------------------
  */
-static void cfftz(int is,
-									int m,
-									int n,
-									int ny,
+static void cfftz(int const is,
+									int const m,
+									int const n,
+									int const ny,
 									dcomplex const u[MAXDIM],
 									dcomplex x[],
 									dcomplex y[])
@@ -727,7 +735,7 @@ static void cfftz(int is,
 		fftz2(is, l + 1, m, n, ny, u, y, x);
 	}
 
-	if (l == m)
+	if (m % 2 != 0)
 	{
 		fftz2(is, l, m, n, ny, u, x, y);
 
@@ -850,7 +858,7 @@ static void compute_initial_conditions(dcomplex u0[NZ][NY][NX])
 	for (k = 0; k < NZ; k++)
 	{
 		x0 = starts[k];
-		for (j = 0; j < NY; j++) // TODO: vectorize vranlc?
+		for (j = 0; j < NY; j++)
 		{
 			// vranlc(2 * NX, &x0, A, (double *)&u0[k][j][0]);
 			int n = 2 * NX;
@@ -945,6 +953,39 @@ static void fft(int dir,
 								dcomplex y2[NTOTAL])
 {
 
+	// cfft1:
+	// zyx -> zxy
+	// cfftz
+	// zxy -> zyx
+
+	// cfft2:
+	// zyx -> zyx
+	// cfftz
+	// zyx -> zyx
+
+	// cfft3:
+	// zyx -> yzx
+	// cfftz
+	// yzx -> zyx
+
+	// fft:
+	// zyx -> zxy
+	// cfftz
+	// zxy -> zyx
+	// cfftz
+	// zyx -> yzx
+	// cfftz
+	// yzx -> zyx
+
+	// ifft:
+	// zyx -> yzx
+	// cfftz
+	// yzx -> zyx
+	// cfftz
+	// zyx -> zxy
+	// cfftz
+	// zxy -> zyx
+
 	/*
 	 * ---------------------------------------------------------------------
 	 * note: args x1, x2 must be different arrays
@@ -965,6 +1006,119 @@ static void fft(int dir,
 		cffts3(-1, u, x, x, (dcomplex(*)[NZ][NX])y1, (dcomplex(*)[NZ][NX])y2);
 		cffts2(-1, u, x, x, (dcomplex(*)[NY][NX])y1, (dcomplex(*)[NY][NX])y2);
 		cffts1(-1, u, x, xout, (dcomplex(*)[NX][NY])y1, (dcomplex(*)[NX][NY])y2);
+	}
+}
+
+#define INDEX_3D(n3, n2, n1, i3, i2, i1) (((i3) * (n2) * (n1)) + ((i2) * (n1)) + (i1))
+
+#define INDEX_ZYX INDEX_3D(NZ, NY, NX, k, j, i)
+#define INDEX_YZX INDEX_3D(NY, NZ, NX, j, k, i)
+#define INDEX_ZXY INDEX_3D(NZ, NX, NY, k, i, j)
+
+static void ifft(dcomplex const u[MAXDIM],
+								 dcomplex x[NTOTAL],
+								 dcomplex y[NTOTAL])
+{
+	// ifft:
+	// zyx -> yzx (3)
+	// cfftz
+	// yzx -> zyx (2)
+	// cfftz
+	// zyx -> zxy (1)
+	// cfftz
+	// zxy -> zyx
+
+	int logd1 = ilog2(NX);
+	int logd2 = ilog2(NY);
+	int logd3 = ilog2(NZ);
+
+	int i, j, k;
+	int idx_zplane, idx_yplane;
+
+// zyx -> yzx
+#pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
+	for (int k = 0; k < NZ; k++)
+	{
+		for (int j = 0; j < NY; j++)
+		{
+			for (int i = 0; i < NX; i++)
+			{
+				// yzx <- zyx
+				int idx_src = INDEX_ZYX;
+				int idx_dst = INDEX_YZX;
+				y[idx_dst].real = x[idx_src].real;
+				y[idx_dst].imag = x[idx_src].imag;
+			}
+		}
+	}
+
+#pragma omp parallel for private(idx_yplane) firstprivate(logd3)
+	for (int idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
+	{
+		cfftz(-1, logd3, NZ, NX, u, (dcomplex *)&y[idx_yplane], (dcomplex *)&x[idx_yplane]);
+	}
+
+// yzx -> zyx
+#pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
+	for (int k = 0; k < NZ; k++)
+	{
+		for (int j = 0; j < NY; j++)
+		{
+			for (int i = 0; i < NX; i++)
+			{
+				// zyx <- yzx
+				int idx_src = INDEX_YZX;
+				int idx_dst = INDEX_ZYX;
+				x[idx_dst].real = y[idx_src].real;
+				x[idx_dst].imag = y[idx_src].imag;
+			}
+		}
+	}
+
+#pragma omp parallel for private(idx_zplane) firstprivate(logd2)
+	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
+	{
+		cfftz(-1, logd2, NY, NX, u, (dcomplex *)&x[idx_zplane], (dcomplex *)&y[idx_zplane]);
+	}
+
+// zyx -> zxy
+#pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
+	for (int k = 0; k < NZ; k++)
+	{
+		for (int j = 0; j < NY; j++)
+		{
+			for (int i = 0; i < NX; i++)
+			{
+				// zxy <- zyx
+				int idx_src = INDEX_ZYX;
+				int idx_dst = INDEX_ZXY;
+				y[idx_dst].real = x[idx_src].real;
+				y[idx_dst].imag = x[idx_src].imag;
+			}
+		}
+	}
+
+#pragma omp parallel for private(idx_zplane) firstprivate(logd1)
+	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
+	{
+		cfftz(-1, logd1, NX, NY, u, (dcomplex *)&y[idx_zplane], (dcomplex *)&x[idx_zplane]);
+	}
+
+	// zxy -> zyx
+#pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
+	for (int k = 0; k < NZ; k++)
+	{
+		for (int j = 0; j < NY; j++)
+		{
+			for (int i = 0; i < NX; i++)
+			{
+				// zyx <- zxy
+				int idx_src = INDEX_ZXY;
+				int idx_dst = INDEX_ZYX;
+				x[idx_dst].real = y[idx_src].real;
+				x[idx_dst].imag = y[idx_src].imag;
+			}
+		}
 	}
 }
 
@@ -1123,7 +1277,7 @@ static void init_ui(dcomplex u0[NZ][NY][NX],
 										double twiddle[NZ][NY][NX])
 {
 	int i, j, k;
-#pragma omp parallel for private(i, j, k)
+#pragma omp parallel for
 	for (k = 0; k < NZ; k++)
 	{
 #if defined(REF)
