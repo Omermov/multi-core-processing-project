@@ -682,7 +682,7 @@ static void cfftz(int const is,
 									dcomplex x[],
 									dcomplex y[])
 {
-	int i, j, l, mx;
+	int i, l, mx;
 
 	/*
 	 * ---------------------------------------------------------------------
@@ -737,16 +737,13 @@ static void cfftz(int const is,
 
 	if (m % 2 != 0)
 	{
-		fftz2(is, l, m, n, ny, u, x, y);
+		fftz2(is, m, m, n, ny, u, x, y);
 
-#pragma omp target teams distribute parallel for simd collapse(2)
-		for (j = 0; j < n; j++)
+#pragma omp target teams distribute parallel for simd
+		for (i = 0; i < n * ny; i++)
 		{
-			for (i = 0; i < ny; i++)
-			{
-				x[j * ny + i].real = y[j * ny + i].real;
-				x[j * ny + i].imag = y[j * ny + i].imag;
-			}
+			x[i].real = y[i].real;
+			x[i].imag = y[i].imag;
 		}
 	}
 #endif
