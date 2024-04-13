@@ -154,7 +154,6 @@ static dcomplex(*u);
 static dcomplex (*u0)[NY][NX];
 static dcomplex (*u1)[NY][NX];
 static dcomplex(*yy1);
-static dcomplex(*yy2);
 #endif
 
 static int logd1;
@@ -241,7 +240,6 @@ int main(int argc, char **argv)
 	u0 = malloc(sizeof(dcomplex) * (NTOTAL));
 	u1 = malloc(sizeof(dcomplex) * (NTOTAL));
 	yy1 = malloc(sizeof(dcomplex) * (NTOTAL));
-	yy2 = malloc(sizeof(dcomplex) * (NTOTAL));
 #endif
 	int i;
 	int iter;
@@ -294,8 +292,7 @@ int main(int argc, char **argv)
 #endif
 
 #pragma omp target data map(alloc : twiddle[0 : NZ][0 : NY][0 : NX], u0[0 : NZ][0 : NY][0 : NX], u1[0 : NZ][0 : NY][0 : NX], \
-																yy1[0 : NTOTAL], yy2[0 : NTOTAL],                                                            \
-																u[0 : MAXDIM]) map(to : sums[0 : (NITER_DEFAULT + 1)])
+																yy1[0 : NTOTAL], u[0 : MAXDIM]) map(to : sums[0 : (NITER_DEFAULT + 1)])
 	{
 
 // Do all 3 init steps in parallel
@@ -336,7 +333,6 @@ int main(int argc, char **argv)
 
 		// TODO: add one pragma teams around all of it?
 
-		// fft(1, u, u1, u0, yy1, yy2);
 		fft(u, (dcomplex *)u1, (dcomplex *)u0, yy1);
 
 #if defined(TIMERS_ENABLED)
