@@ -979,7 +979,7 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd1)
+#pragma omp parallel for firstprivate(logd1) num_threads(2)
 	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
 	{
 		cfftz(1, logd1, NX, NY, u, (dcomplex *)&y[idx_zplane], (dcomplex *)&xout[idx_zplane]);
@@ -1001,7 +1001,7 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd2)
+#pragma omp parallel for firstprivate(logd2) num_threads(2)
 	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
 	{
 		cfftz(1, logd2, NY, NX, u, (dcomplex *)&xout[idx_zplane], (dcomplex *)&y[idx_zplane]);
@@ -1023,7 +1023,7 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd3)
+#pragma omp parallel for firstprivate(logd3) num_threads(2)
 	for (int idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
 	{
 		cfftz(1, logd3, NZ, NX, u, (dcomplex *)&y[idx_yplane], (dcomplex *)&xout[idx_yplane]);
@@ -1076,7 +1076,7 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd3)
+#pragma omp parallel for firstprivate(logd3) num_threads(2)
 	for (int idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
 	{
 		cfftz(-1, logd3, NZ, NX, u, (dcomplex *)&y[idx_yplane], (dcomplex *)&xout[idx_yplane]);
@@ -1098,7 +1098,7 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd2)
+#pragma omp parallel for firstprivate(logd2) num_threads(2)
 	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
 	{
 		cfftz(-1, logd2, NY, NX, u, (dcomplex *)&xout[idx_zplane], (dcomplex *)&y[idx_zplane]);
@@ -1120,7 +1120,7 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd1)
+#pragma omp parallel for firstprivate(logd1) num_threads(2)
 	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
 	{
 		cfftz(-1, logd1, NX, NY, u, (dcomplex *)&y[idx_zplane], (dcomplex *)&xout[idx_zplane]);
@@ -1220,9 +1220,7 @@ static void fftz2(int is,
 		i12 = i11 + n1;
 		i21 = i * lj;
 		i22 = i21 + lk;
-#endif
 
-#if defined(REF)
 		if (is >= 1)
 		{
 			u1 = u[ku + i];
@@ -1230,12 +1228,6 @@ static void fftz2(int is,
 		else
 		{
 			u1 = dconjg(u[ku + i]);
-		}
-#else
-		u1 = u[ku + i];
-		if (is < 0)
-		{
-			u1.imag *= -1;
 		}
 #endif
 
@@ -1262,6 +1254,12 @@ static void fftz2(int is,
 
 				double x11_sub_x21_real = p_x11->real - p_x21->real;
 				double x11_sub_x21_imag = p_x11->imag - p_x21->imag;
+
+				dcomplex u1 = u[ku + i];
+				if (is < 0)
+				{
+					u1.imag *= -1;
+				}
 
 				y[(i * lj + lk + k) * ny + j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
 				y[(i * lj + lk + k) * ny + j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
