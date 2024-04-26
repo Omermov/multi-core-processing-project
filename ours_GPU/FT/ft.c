@@ -700,14 +700,14 @@ static void fft(dcomplex const u[MAXDIM],
 
 // zyx -> zxy
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
-	for (int k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ; k++)
 	{
-		for (int j = 0; j < NY; j++)
+		for (long j = 0; j < NY; j++)
 		{
-			for (int i = 0; i < NX; i++)
+			for (long i = 0; i < NX; i++)
 			{
-				int idx_src = INDEX_ZYX;
-				int idx_dst = INDEX_ZXY;
+				long idx_src = INDEX_ZYX;
+				long idx_dst = INDEX_ZXY;
 				y[idx_dst].real = x[idx_src].real;
 				y[idx_dst].imag = x[idx_src].imag;
 			}
@@ -715,21 +715,21 @@ static void fft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd1) num_threads(2)
-	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
+	for (long idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
 	{
 		cfftz(1, logd1, NX, NY, u, (dcomplex *)&y[idx_zplane], (dcomplex *)&xout[idx_zplane]);
 	}
 
 // zxy -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
-	for (int k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ; k++)
 	{
-		for (int j = 0; j < NY; j++)
+		for (long j = 0; j < NY; j++)
 		{
-			for (int i = 0; i < NX; i++)
+			for (long i = 0; i < NX; i++)
 			{
-				int idx_src = INDEX_ZXY;
-				int idx_dst = INDEX_ZYX;
+				long idx_src = INDEX_ZXY;
+				long idx_dst = INDEX_ZYX;
 				xout[idx_dst].real = y[idx_src].real;
 				xout[idx_dst].imag = y[idx_src].imag;
 			}
@@ -737,21 +737,21 @@ static void fft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd2) num_threads(2)
-	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
+	for (long idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
 	{
 		cfftz(1, logd2, NY, NX, u, (dcomplex *)&xout[idx_zplane], (dcomplex *)&y[idx_zplane]);
 	}
 
 // zyx -> yzx
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
-	for (int k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ; k++)
 	{
-		for (int j = 0; j < NY; j++)
+		for (long j = 0; j < NY; j++)
 		{
-			for (int i = 0; i < NX; i++)
+			for (long i = 0; i < NX; i++)
 			{
-				int idx_src = INDEX_ZYX;
-				int idx_dst = INDEX_YZX;
+				long idx_src = INDEX_ZYX;
+				long idx_dst = INDEX_YZX;
 				y[idx_dst].real = xout[idx_src].real;
 				y[idx_dst].imag = xout[idx_src].imag;
 			}
@@ -759,21 +759,21 @@ static void fft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd3) num_threads(2)
-	for (int idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
+	for (long idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
 	{
 		cfftz(1, logd3, NZ, NX, u, (dcomplex *)&y[idx_yplane], (dcomplex *)&xout[idx_yplane]);
 	}
 
 	// yzx -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
-	for (int k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ; k++)
 	{
-		for (int j = 0; j < NY; j++)
+		for (long j = 0; j < NY; j++)
 		{
-			for (int i = 0; i < NX; i++)
+			for (long i = 0; i < NX; i++)
 			{
-				int idx_src = INDEX_YZX;
-				int idx_dst = INDEX_ZYX;
+				long idx_src = INDEX_YZX;
+				long idx_dst = INDEX_ZYX;
 				xout[idx_dst].real = y[idx_src].real;
 				xout[idx_dst].imag = y[idx_src].imag;
 			}
@@ -797,14 +797,14 @@ static void ifft(dcomplex const u[MAXDIM],
 
 // zyx -> yzx
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
-	for (int k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ; k++)
 	{
-		for (int j = 0; j < NY; j++)
+		for (long j = 0; j < NY; j++)
 		{
-			for (int i = 0; i < NX; i++)
+			for (long i = 0; i < NX; i++)
 			{
-				int idx_src = INDEX_ZYX;
-				int idx_dst = INDEX_YZX;
+				long idx_src = INDEX_ZYX;
+				long idx_dst = INDEX_YZX;
 				y[idx_dst].real = x[idx_src].real;
 				y[idx_dst].imag = x[idx_src].imag;
 			}
@@ -812,21 +812,21 @@ static void ifft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd3) num_threads(2)
-	for (int idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
+	for (long idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
 	{
 		cfftz(-1, logd3, NZ, NX, u, (dcomplex *)&y[idx_yplane], (dcomplex *)&xout[idx_yplane]);
 	}
 
 // yzx -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
-	for (int k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ; k++)
 	{
-		for (int j = 0; j < NY; j++)
+		for (long j = 0; j < NY; j++)
 		{
-			for (int i = 0; i < NX; i++)
+			for (long i = 0; i < NX; i++)
 			{
-				int idx_src = INDEX_YZX;
-				int idx_dst = INDEX_ZYX;
+				long idx_src = INDEX_YZX;
+				long idx_dst = INDEX_ZYX;
 				xout[idx_dst].real = y[idx_src].real;
 				xout[idx_dst].imag = y[idx_src].imag;
 			}
@@ -834,21 +834,21 @@ static void ifft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd2) num_threads(2)
-	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
+	for (long idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
 	{
 		cfftz(-1, logd2, NY, NX, u, (dcomplex *)&xout[idx_zplane], (dcomplex *)&y[idx_zplane]);
 	}
 
 // zyx -> zxy
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
-	for (int k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ; k++)
 	{
-		for (int j = 0; j < NY; j++)
+		for (long j = 0; j < NY; j++)
 		{
-			for (int i = 0; i < NX; i++)
+			for (long i = 0; i < NX; i++)
 			{
-				int idx_src = INDEX_ZYX;
-				int idx_dst = INDEX_ZXY;
+				long idx_src = INDEX_ZYX;
+				long idx_dst = INDEX_ZXY;
 				y[idx_dst].real = xout[idx_src].real;
 				y[idx_dst].imag = xout[idx_src].imag;
 			}
@@ -856,21 +856,21 @@ static void ifft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd1) num_threads(2)
-	for (int idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
+	for (long idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
 	{
 		cfftz(-1, logd1, NX, NY, u, (dcomplex *)&y[idx_zplane], (dcomplex *)&xout[idx_zplane]);
 	}
 
 	// zxy -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
-	for (int k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ; k++)
 	{
-		for (int j = 0; j < NY; j++)
+		for (long j = 0; j < NY; j++)
 		{
-			for (int i = 0; i < NX; i++)
+			for (long i = 0; i < NX; i++)
 			{
-				int idx_src = INDEX_ZXY;
-				int idx_dst = INDEX_ZYX;
+				long idx_src = INDEX_ZXY;
+				long idx_dst = INDEX_ZYX;
 				xout[idx_dst].real = y[idx_src].real;
 				xout[idx_dst].imag = y[idx_src].imag;
 			}
