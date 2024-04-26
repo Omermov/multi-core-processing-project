@@ -244,7 +244,7 @@ int main(int argc, char **argv)
 	}
 #endif
 	setup();
-	// init_ui(u0, u1, twiddle);
+	init_ui(u0, u1, twiddle);
 	// 	compute_indexmap(twiddle);
 	// 	compute_initial_conditions(u1);
 	// 	fft_init(MAXDIM);
@@ -273,33 +273,12 @@ int main(int argc, char **argv)
 	timer_start(T_SETUP);
 #endif
 
-#pragma omp target data map(alloc : twiddle[0 : NZ][0 : NY][0 : NX], u0[0 : NZ][0 : NY][0 : NX], u1[0 : NZ][0 : NY][0 : NX], \
-																yy1[0 : NTOTAL], u[0 : MAXDIM]) map(to : sums[0 : (NITER_DEFAULT + 1)])
+	compute_indexmap(twiddle);
+	compute_initial_conditions(u1);
+	fft_init(MAXDIM);
+
+#pragma omp target data map(to : u[0 : MAXDIM])
 	{
-
-// Do all 3 init steps in parallel
-// FIXME: I think task is not doing anything if it's not inside a parallel pragma ???
-#pragma omp task
-		compute_indexmap(twiddle);
-
-#pragma omp task
-		{
-			compute_initial_conditions(u1);
-
-#pragma omp target update to(u1[0 : NZ][0 : NY][0 : NX])
-		}
-
-#pragma omp task
-		{
-			// Comupte u on CPU
-			fft_init(MAXDIM);
-
-			// Copy u to GPU
-#pragma omp target update to(u[0 : MAXDIM])
-		}
-
-// Wait for init to finish
-#pragma omp taskwait
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -308,8 +287,6 @@ int main(int argc, char **argv)
 			timer_start(T_FFT);
 		}
 #endif
-
-		// TODO: add one pragma teams around all of it?
 
 		fft(u, (dcomplex *)u1, (dcomplex *)u0, yy1);
 
@@ -344,8 +321,7 @@ int main(int argc, char **argv)
 			}
 #endif
 
-			// TODO: I think this barrier is not required
-			// #pragma omp barrier
+#pragma omp parallel
 			checksum(iter, u1, sums);
 
 #if defined(TIMERS_ENABLED)
@@ -491,9 +467,17 @@ static void checksum(int i,
 {
 
 	int j, q, r, s;
-	double chk_worker[2] = {0.0, 0.0};
+	static double chk_worker[2];
 
-#pragma omp target teams distribute parallel for reduction(+ : chk_worker[0 : 2]) map(tofrom : chk_worker[0 : 2])
+#pragma omp single
+	{
+		chk_worker[0] = 0.0;
+		chk_worker[1] = 0.0;
+
+		printf("%f\n", u1[14][12][34].real);
+	}
+
+#pragma omp for reduction(+ : chk_worker[0 : 2])
 	for (j = 1; j <= 1024; j++)
 	{
 		q = j % NX;
@@ -503,11 +487,14 @@ static void checksum(int i,
 		chk_worker[1] += u1[s][r][q].imag;
 	}
 
-	double chk_worker_real = chk_worker[0] / (double)(NTOTAL);
-	double chk_worker_imag = chk_worker[1] / (double)(NTOTAL);
-	printf(" T =%5d     Checksum =%22.12e%22.12e\n", i, chk_worker_real, chk_worker_imag);
-	sums[i].real = chk_worker_real;
-	sums[i].imag = chk_worker_imag;
+#pragma omp single
+	{
+		double chk_worker_real = chk_worker[0] / (double)(NTOTAL);
+		double chk_worker_imag = chk_worker[1] / (double)(NTOTAL);
+		printf(" T =%5d     Checksum =%22.12e%22.12e\n", i, chk_worker_real, chk_worker_imag);
+		sums[i].real = chk_worker_real;
+		sums[i].imag = chk_worker_imag;
+	}
 }
 
 #define r23 (0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5 * 0.5)
@@ -535,7 +522,7 @@ static void compute_indexmap(double twiddle[NZ][NY][NX])
 	 * ---------------------------------------------------------------------
 	 */
 	ap = -4.0 * ALPHA * PI * PI;
-#pragma omp target teams distribute parallel for simd collapse(3) private(i, j, kk, kk2, jj, kj2, ii)
+#pragma omp parallel for simd collapse(3) private(i, j, kk, kk2, jj, kj2, ii)
 	for (k = 0; k < NZ; k++)
 	{
 		kk = ((k + NZ / 2) % NZ) - NZ / 2;
@@ -652,7 +639,8 @@ static void evolve(dcomplex u0[NZ][NY][NX],
 									 double const twiddle[NZ][NY][NX])
 {
 	int i, j, k;
-#pragma omp target teams distribute parallel for simd collapse(3)
+// #pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp parallel for
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -699,7 +687,7 @@ static void fft(dcomplex const u[MAXDIM],
 	// yzx -> zyx
 
 // zyx -> zxy
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
+#pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
 	{
 		for (long j = 0; j < NY; j++)
@@ -714,14 +702,23 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd1) num_threads(2)
-	for (long idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
+	// #pragma omp parallel for firstprivate(logd1) num_threads(2)
+	for (long k = 0; k < NZ; k++)
 	{
-		cfftz(1, logd1, NX, NY, u, (dcomplex *)&y[idx_zplane], (dcomplex *)&xout[idx_zplane]);
+		long size = NX * NY;
+		long idx_zplane = k * size;
+
+		dcomplex *buff = (dcomplex *)&y[idx_zplane];
+		dcomplex *helper = (dcomplex *)&xout[idx_zplane];
+
+#pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
+		{
+			cfftz(1, logd1, NX, NY, u, buff, helper);
+		}
 	}
 
 // zxy -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+#pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
 	{
 		for (long j = 0; j < NY; j++)
@@ -736,14 +733,23 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd2) num_threads(2)
-	for (long idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
+	// #pragma omp parallel for firstprivate(logd2) num_threads(2)
+	for (long k = 0; k < NZ; k++)
 	{
-		cfftz(1, logd2, NY, NX, u, (dcomplex *)&xout[idx_zplane], (dcomplex *)&y[idx_zplane]);
+		long size = NY * NX;
+		long idx_zplane = k * size;
+
+		dcomplex *buff = (dcomplex *)&xout[idx_zplane];
+		dcomplex *helper = (dcomplex *)&y[idx_zplane];
+
+#pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
+		{
+			cfftz(1, logd2, NY, NX, u, buff, helper);
+		}
 	}
 
 // zyx -> yzx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+#pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
 	{
 		for (long j = 0; j < NY; j++)
@@ -758,14 +764,23 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd3) num_threads(2)
-	for (long idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
+	// #pragma omp parallel for firstprivate(logd3) num_threads(2)
+	for (long j = 0; j < NY; j++)
 	{
-		cfftz(1, logd3, NZ, NX, u, (dcomplex *)&y[idx_yplane], (dcomplex *)&xout[idx_yplane]);
+		long size = NZ * NX;
+		long idx_yplane = j * size;
+
+		dcomplex *buff = (dcomplex *)&y[idx_yplane];
+		dcomplex *helper = (dcomplex *)&xout[idx_yplane];
+
+#pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
+		{
+			cfftz(1, logd3, NZ, NX, u, buff, helper);
+		}
 	}
 
-	// yzx -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+// yzx -> zyx
+#pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
 	{
 		for (long j = 0; j < NY; j++)
@@ -796,7 +811,7 @@ static void ifft(dcomplex const u[MAXDIM],
 	// zxy -> zyx
 
 // zyx -> yzx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
+#pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
 	{
 		for (long j = 0; j < NY; j++)
@@ -811,14 +826,23 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd3) num_threads(2)
-	for (long idx_yplane = 0; idx_yplane < NTOTAL; idx_yplane += (NZ * NX))
+	// #pragma omp parallel for firstprivate(logd3) num_threads(2)
+	for (long j = 0; j < NY; j++)
 	{
-		cfftz(-1, logd3, NZ, NX, u, (dcomplex *)&y[idx_yplane], (dcomplex *)&xout[idx_yplane]);
+		long size = NZ * NX;
+		long idx_yplane = j * size;
+
+		dcomplex *buff = (dcomplex *)&y[idx_yplane];
+		dcomplex *helper = (dcomplex *)&xout[idx_yplane];
+
+#pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
+		{
+			cfftz(-1, logd3, NZ, NX, u, buff, helper);
+		}
 	}
 
 // yzx -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+#pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
 	{
 		for (long j = 0; j < NY; j++)
@@ -833,14 +857,23 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd2) num_threads(2)
-	for (long idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NY * NX))
+	// #pragma omp parallel for firstprivate(logd2) num_threads(2)
+	for (long k = 0; k < NZ; k++)
 	{
-		cfftz(-1, logd2, NY, NX, u, (dcomplex *)&xout[idx_zplane], (dcomplex *)&y[idx_zplane]);
+		long size = NY * NX;
+		long idx_zplane = k * size;
+
+		dcomplex *buff = (dcomplex *)&xout[idx_zplane];
+		dcomplex *helper = (dcomplex *)&y[idx_zplane];
+
+#pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
+		{
+			cfftz(-1, logd2, NY, NX, u, buff, helper);
+		}
 	}
 
 // zyx -> zxy
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+#pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
 	{
 		for (long j = 0; j < NY; j++)
@@ -855,14 +888,23 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd1) num_threads(2)
-	for (long idx_zplane = 0; idx_zplane < NTOTAL; idx_zplane += (NX * NY))
+	// #pragma omp parallel for firstprivate(logd1) num_threads(2)
+	for (long k = 0; k < NZ; k++)
 	{
-		cfftz(-1, logd1, NX, NY, u, (dcomplex *)&y[idx_zplane], (dcomplex *)&xout[idx_zplane]);
+		long size = NX * NY;
+		long idx_zplane = k * size;
+
+		dcomplex *buff = (dcomplex *)&y[idx_zplane];
+		dcomplex *helper = (dcomplex *)&xout[idx_zplane];
+
+#pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
+		{
+			cfftz(-1, logd1, NX, NY, u, buff, helper);
+		}
 	}
 
 	// zxy -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+#pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
 	{
 		for (long j = 0; j < NY; j++)
@@ -1034,7 +1076,6 @@ static void init_ui(dcomplex u0[NZ][NY][NX],
 #pragma omp parallel for
 	for (k = 0; k < NZ; k++)
 	{
-#if defined(REF)
 		for (j = 0; j < NY; j++)
 		{
 			for (i = 0; i < NX; i++)
@@ -1044,11 +1085,6 @@ static void init_ui(dcomplex u0[NZ][NY][NX],
 				twiddle[k][j][i] = 0.0;
 			}
 		}
-#else
-		memset((void *)u0[k], 0, NX * NY * sizeof(dcomplex));
-		memset((void *)u1[k], 0, NX * NY * sizeof(dcomplex));
-		memset((void *)twiddle[k], 0, NX * NY * sizeof(double));
-#endif
 	}
 }
 
