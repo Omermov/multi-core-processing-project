@@ -376,7 +376,6 @@ int main(int argc, char **argv)
 	{
 		mflops = 0.0;
 	}
-	setenv("OMP_NUM_THREADS", "1", 0);
 	c_print_results((char *)"FT",
 									class_npb,
 									NX,
