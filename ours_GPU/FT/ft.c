@@ -473,8 +473,6 @@ static void checksum(int i,
 	{
 		chk_worker[0] = 0.0;
 		chk_worker[1] = 0.0;
-
-		printf("%f\n", u1[14][12][34].real);
 	}
 
 #pragma omp for reduction(+ : chk_worker[0 : 2])
