@@ -684,6 +684,8 @@ static void fft(dcomplex const u[MAXDIM],
 	// cfftz (3)
 	// yzx -> zyx
 
+	dcomplex *helper = malloc(sizeof(dcomplex) * NX * max(NY, NZ));
+
 // zyx -> zxy
 #pragma omp parallel for simd collapse(3)
 	for (long k = 0; k < NZ; k++)
@@ -700,14 +702,13 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd1) num_threads(2)
+	// #pragma omp parallel for firstprivate(logd1) // num_threads(2)
 	for (long k = 0; k < NZ; k++)
 	{
 		long size = NX * NY;
 		long idx_zplane = k * size;
 
 		dcomplex *buff = (dcomplex *)&y[idx_zplane];
-		dcomplex *helper = (dcomplex *)&xout[idx_zplane];
 
 #pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
 		{
@@ -731,14 +732,13 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd2) num_threads(2)
+	// #pragma omp parallel for firstprivate(logd2) // num_threads(2)
 	for (long k = 0; k < NZ; k++)
 	{
 		long size = NY * NX;
 		long idx_zplane = k * size;
 
 		dcomplex *buff = (dcomplex *)&xout[idx_zplane];
-		dcomplex *helper = (dcomplex *)&y[idx_zplane];
 
 #pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
 		{
@@ -762,14 +762,13 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd3) num_threads(2)
+	// #pragma omp parallel for firstprivate(logd3) // num_threads(2)
 	for (long j = 0; j < NY; j++)
 	{
 		long size = NZ * NX;
 		long idx_yplane = j * size;
 
 		dcomplex *buff = (dcomplex *)&y[idx_yplane];
-		dcomplex *helper = (dcomplex *)&xout[idx_yplane];
 
 #pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
 		{
@@ -792,6 +791,8 @@ static void fft(dcomplex const u[MAXDIM],
 			}
 		}
 	}
+
+	free(helper);
 }
 
 static void ifft(dcomplex const u[MAXDIM],
@@ -807,6 +808,8 @@ static void ifft(dcomplex const u[MAXDIM],
 	// zyx -> zxy
 	// cfftz (1)
 	// zxy -> zyx
+
+	dcomplex *helper = malloc(sizeof(dcomplex) * NX * max(NY, NZ));
 
 // zyx -> yzx
 #pragma omp parallel for simd collapse(3)
@@ -824,14 +827,13 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd3) num_threads(2)
+	// #pragma omp parallel for firstprivate(logd3) // num_threads(2)
 	for (long j = 0; j < NY; j++)
 	{
 		long size = NZ * NX;
 		long idx_yplane = j * size;
 
 		dcomplex *buff = (dcomplex *)&y[idx_yplane];
-		dcomplex *helper = (dcomplex *)&xout[idx_yplane];
 
 #pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
 		{
@@ -855,14 +857,13 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd2) num_threads(2)
+	// #pragma omp parallel for firstprivate(logd2) // num_threads(2)
 	for (long k = 0; k < NZ; k++)
 	{
 		long size = NY * NX;
 		long idx_zplane = k * size;
 
 		dcomplex *buff = (dcomplex *)&xout[idx_zplane];
-		dcomplex *helper = (dcomplex *)&y[idx_zplane];
 
 #pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
 		{
@@ -886,14 +887,13 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	// #pragma omp parallel for firstprivate(logd1) num_threads(2)
+	// #pragma omp parallel for firstprivate(logd1) // num_threads(2)
 	for (long k = 0; k < NZ; k++)
 	{
 		long size = NX * NY;
 		long idx_zplane = k * size;
 
 		dcomplex *buff = (dcomplex *)&y[idx_zplane];
-		dcomplex *helper = (dcomplex *)&xout[idx_zplane];
 
 #pragma omp target data map(tofrom : buff[0 : size]) map(alloc : helper[0 : size])
 		{
@@ -916,6 +916,8 @@ static void ifft(dcomplex const u[MAXDIM],
 			}
 		}
 	}
+
+	free(helper);
 }
 
 /*
