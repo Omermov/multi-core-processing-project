@@ -220,7 +220,7 @@ int main(int argc, char **argv)
 	setenv("IGC_EnableDPEmulation", "1", 1);
 	setenv("OMP_TARGET_OFFLOAD", "MANDATORY", 1);
 
-	num_devices = 2; // omp_get_num_devices();
+	num_devices = omp_get_num_devices();
 
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
 	printf(" DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION mode on\n");
