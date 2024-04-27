@@ -156,7 +156,7 @@ static dcomplex(*u);
 static dcomplex (*u0)[NY][NX];
 static dcomplex (*u1)[NY][NX];
 static dcomplex(*yy1);
-static dcomplex (*helpers)[HELPER_SIZE];
+static dcomplex(*helper);
 #endif
 
 static int logd1;
@@ -231,7 +231,7 @@ int main(int argc, char **argv)
 	u0 = malloc(sizeof(dcomplex) * (NTOTAL));
 	u1 = malloc(sizeof(dcomplex) * (NTOTAL));
 	yy1 = malloc(sizeof(dcomplex) * (NTOTAL));
-	helpers = malloc(sizeof(dcomplex) * HELPER_SIZE * num_devices);
+	helper = malloc(sizeof(dcomplex) * HELPER_SIZE);
 #endif
 	int i;
 	int iter;
@@ -291,7 +291,7 @@ int main(int argc, char **argv)
 
 	for (int device_id = 0; device_id < num_devices; device_id++)
 	{
-#pragma omp target enter data map(alloc : helpers[device_id][0 : HELPER_SIZE]) device(device_id)
+#pragma omp target enter data map(alloc : helper[0 : HELPER_SIZE]) device(device_id)
 #pragma omp target enter data map(to : u[0 : MAXDIM]) device(device_id)
 	}
 
@@ -347,7 +347,7 @@ int main(int argc, char **argv)
 
 	for (int device_id = 0; device_id < num_devices; device_id++)
 	{
-#pragma omp target exit data map(release : helpers[device_id][0 : HELPER_SIZE], u[0 : MAXDIM]) device(device_id)
+#pragma omp target exit data map(release : helper[0 : HELPER_SIZE], u[0 : MAXDIM]) device(device_id)
 	}
 
 	t1 = omp_get_wtime();
@@ -729,7 +729,6 @@ static void fft(dcomplex const u[MAXDIM],
 		long idx_zplane = k * size;
 
 		dcomplex *buff = (dcomplex *)&y[idx_zplane];
-		dcomplex *helper = helpers[device_id];
 
 #pragma omp target data map(tofrom : buff[0 : size]) device(device_id)
 		{
@@ -762,7 +761,6 @@ static void fft(dcomplex const u[MAXDIM],
 		long idx_zplane = k * size;
 
 		dcomplex *buff = (dcomplex *)&xout[idx_zplane];
-		dcomplex *helper = helpers[device_id];
 
 #pragma omp target data map(tofrom : buff[0 : size]) device(device_id)
 		{
@@ -795,7 +793,6 @@ static void fft(dcomplex const u[MAXDIM],
 		long idx_yplane = j * size;
 
 		dcomplex *buff = (dcomplex *)&y[idx_yplane];
-		dcomplex *helper = helpers[device_id];
 
 #pragma omp target data map(tofrom : buff[0 : size]) device(device_id)
 		{
@@ -859,7 +856,6 @@ static void ifft(dcomplex const u[MAXDIM],
 		long idx_yplane = j * size;
 
 		dcomplex *buff = (dcomplex *)&y[idx_yplane];
-		dcomplex *helper = helpers[device_id];
 
 #pragma omp target data map(tofrom : buff[0 : size]) device(device_id)
 		{
@@ -892,7 +888,6 @@ static void ifft(dcomplex const u[MAXDIM],
 		long idx_zplane = k * size;
 
 		dcomplex *buff = (dcomplex *)&xout[idx_zplane];
-		dcomplex *helper = helpers[device_id];
 
 #pragma omp target data map(tofrom : buff[0 : size]) device(device_id)
 		{
@@ -925,7 +920,6 @@ static void ifft(dcomplex const u[MAXDIM],
 		long idx_zplane = k * size;
 
 		dcomplex *buff = (dcomplex *)&y[idx_zplane];
-		dcomplex *helper = helpers[device_id];
 
 #pragma omp target data map(tofrom : buff[0 : size]) device(device_id)
 		{
