@@ -685,10 +685,13 @@ static void evolve(dcomplex u0[NZ][NY][NX],
 }
 
 #define INDEX_3D(n3, n2, n1, i3, i2, i1) (((i3) * (n2) * (n1)) + ((i2) * (n1)) + (i1))
-
 #define INDEX_ZYX INDEX_3D(NZ, NY, NX, k, j, i)
 #define INDEX_YZX INDEX_3D(NY, NZ, NX, j, k, i)
 #define INDEX_ZXY INDEX_3D(NZ, NX, NY, k, i, j)
+
+#define INDEX_2D(n2, n1, i2, i1) (((i2) * (n1)) + (i1))
+#define INDEX_XY INDEX_2D(NX, NY, i, j)
+#define INDEX_YX INDEX_2D(NY, NX, j, i)
 
 static void fft(dcomplex const u[MAXDIM],
 								dcomplex x[NTOTAL],
@@ -879,7 +882,7 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd2) num_threads(num_devices)
+#pragma omp parallel for firstprivate(logd2, logd1) num_threads(num_devices)
 	for (long k = 0; k < NZ; k++)
 	{
 		int device_id = omp_get_thread_num();
@@ -892,53 +895,33 @@ static void ifft(dcomplex const u[MAXDIM],
 #pragma omp target data map(tofrom : buff[0 : size]) device(device_id)
 		{
 			cfftz(-1, logd2, NY, NX, u, buff, helper, device_id);
-		}
-	}
 
-// zyx -> zxy
-#pragma omp parallel for simd collapse(3)
-	for (long k = 0; k < NZ; k++)
-	{
-		for (long j = 0; j < NY; j++)
-		{
-			for (long i = 0; i < NX; i++)
+			// zyx -> zxy
+#pragma omp target teams distribute parallel for simd collapse(2) device(device_id)
+			for (long j = 0; j < NY; j++)
 			{
-				long idx_src = INDEX_ZYX;
-				long idx_dst = INDEX_ZXY;
-				y[idx_dst].real = xout[idx_src].real;
-				y[idx_dst].imag = xout[idx_src].imag;
+				for (long i = 0; i < NX; i++)
+				{
+					long idx_src = INDEX_YX;
+					long idx_dst = INDEX_XY;
+					helper[idx_dst].real = buff[idx_src].real;
+					helper[idx_dst].imag = buff[idx_src].imag;
+				}
 			}
-		}
-	}
 
-#pragma omp parallel for firstprivate(logd1) num_threads(num_devices)
-	for (long k = 0; k < NZ; k++)
-	{
-		int device_id = omp_get_thread_num();
+			cfftz(-1, logd1, NX, NY, u, helper, buff, device_id);
 
-		long size = NX * NY;
-		long idx_zplane = k * size;
-
-		dcomplex *buff = (dcomplex *)&y[idx_zplane];
-
-#pragma omp target data map(tofrom : buff[0 : size]) device(device_id)
-		{
-			cfftz(-1, logd1, NX, NY, u, buff, helper, device_id);
-		}
-	}
-
-	// zxy -> zyx
-#pragma omp parallel for simd collapse(3)
-	for (long k = 0; k < NZ; k++)
-	{
-		for (long j = 0; j < NY; j++)
-		{
-			for (long i = 0; i < NX; i++)
+			// zxy -> zyx
+#pragma omp target teams distribute parallel for simd collapse(2) device(device_id)
+			for (long j = 0; j < NY; j++)
 			{
-				long idx_src = INDEX_ZXY;
-				long idx_dst = INDEX_ZYX;
-				xout[idx_dst].real = y[idx_src].real;
-				xout[idx_dst].imag = y[idx_src].imag;
+				for (long i = 0; i < NX; i++)
+				{
+					long idx_src = INDEX_XY;
+					long idx_dst = INDEX_YX;
+					buff[idx_dst].real = helper[idx_src].real;
+					buff[idx_dst].imag = helper[idx_src].imag;
+				}
 			}
 		}
 	}
