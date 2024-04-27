@@ -718,7 +718,7 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd1, logd2)
+#pragma omp parallel for firstprivate(logd1, logd2) num_threads(num_devices)
 	for (long k = 0; k < NZ; k++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
@@ -766,7 +766,7 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd3)
+#pragma omp parallel for firstprivate(logd3) num_threads(num_devices)
 	for (long j = 0; j < NY; j++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
@@ -830,7 +830,7 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd3)
+#pragma omp parallel for firstprivate(logd3) num_threads(num_devices)
 	for (long j = 0; j < NY; j++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
@@ -863,7 +863,7 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-#pragma omp parallel for firstprivate(logd2, logd1)
+#pragma omp parallel for firstprivate(logd2, logd1) num_threads(num_devices)
 	for (long k = 0; k < NZ; k++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
