@@ -729,7 +729,7 @@ static void fft(dcomplex const u[MAXDIM],
 		dcomplex *data_buff = (dcomplex *)&y[idx_zplane];
 		dcomplex *helper_buff = (dcomplex *)&xout[idx_zplane];
 
-#pragma omp target data map(tofrom : data_buff[0 : size]) map(tofrom : helper_buff[0 : size]) device(device_id)
+#pragma omp target data map(to : data_buff[0 : size]) map(from : helper_buff[0 : size]) device(device_id)
 		{
 			cfftz(1, logd1, NX, NY, u, data_buff, helper_buff, device_id);
 
