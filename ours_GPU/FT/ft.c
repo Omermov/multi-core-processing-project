@@ -167,6 +167,7 @@ static void cfftz(int const is,
 									int const m,
 									int const n,
 									int const ny,
+									int const batch_size,
 									dcomplex const u[MAXDIM],
 									dcomplex x[],
 									dcomplex y[],
@@ -193,6 +194,7 @@ static void fftz2(int is,
 									int m,
 									int n,
 									int ny,
+									int batch_size,
 									dcomplex const u[MAXDIM],
 									dcomplex const x[],
 									dcomplex y[],
@@ -405,6 +407,7 @@ static void cfftz(int const is,
 									int const m,
 									int const n,
 									int const ny,
+									int const batch_size,
 									dcomplex const u[MAXDIM],
 									dcomplex x[],
 									dcomplex y[],
@@ -459,16 +462,16 @@ static void cfftz(int const is,
 #else
 	for (l = 1; l < m; l += 2)
 	{
-		fftz2(is, l, m, n, ny, u, x, y, device_id);
-		fftz2(is, l + 1, m, n, ny, u, y, x, device_id);
+		fftz2(is, l, m, n, ny, batch_size, u, x, y, device_id);
+		fftz2(is, l + 1, m, n, ny, batch_size, u, y, x, device_id);
 	}
 
 	if (m % 2 != 0)
 	{
-		fftz2(is, m, m, n, ny, u, x, y, device_id);
+		fftz2(is, m, m, n, ny, batch_size, u, x, y, device_id);
 
 #pragma omp target teams distribute parallel for simd device(device_id)
-		for (i = 0; i < 2 * n * ny; i++)
+		for (i = 0; i < 2 * n * ny * batch_size; i++)
 		{
 			((double *)x)[i] = ((double *)y)[i];
 		}
@@ -718,12 +721,14 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
+	int batch_size_z = min(NZ, NZ / 4);
+
 #pragma omp parallel for firstprivate(logd1, logd2) num_threads(num_devices)
-	for (long k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ / batch_size_z; k++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NX * NY;
+		long size = NX * NY * batch_size_z;
 		long idx_zplane = k * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_zplane];
@@ -731,22 +736,25 @@ static void fft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(to : data_buff[0 : size]) map(from : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(1, logd1, NX, NY, u, data_buff, helper_buff, device_id);
+			cfftz(1, logd1, NX, NY, batch_size_z, u, data_buff, helper_buff, device_id);
 
 			// zxy -> zyx
-#pragma omp target teams distribute parallel for simd collapse(2) device(device_id)
-			for (long j = 0; j < NY; j++)
+#pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
+			for (long k = 0; k < batch_size_z; k++)
 			{
-				for (long i = 0; i < NX; i++)
+				for (long j = 0; j < NY; j++)
 				{
-					long idx_src = INDEX_XY;
-					long idx_dst = INDEX_YX;
-					helper_buff[idx_dst].real = data_buff[idx_src].real;
-					helper_buff[idx_dst].imag = data_buff[idx_src].imag;
+					for (long i = 0; i < NX; i++)
+					{
+						long idx_src = INDEX_ZXY;
+						long idx_dst = INDEX_ZYX;
+						helper_buff[idx_dst].real = data_buff[idx_src].real;
+						helper_buff[idx_dst].imag = data_buff[idx_src].imag;
+					}
 				}
 			}
 
-			cfftz(1, logd2, NY, NX, u, helper_buff, data_buff, device_id);
+			cfftz(1, logd2, NY, NX, batch_size_z, u, helper_buff, data_buff, device_id);
 		}
 	}
 
@@ -766,12 +774,14 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
+	int batch_size_y = min(NY, NY / 4);
+
 #pragma omp parallel for firstprivate(logd3) num_threads(num_devices)
-	for (long j = 0; j < NY; j++)
+	for (long j = 0; j < NY / batch_size_y; j++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NZ * NX;
+		long size = NZ * NX * batch_size_y;
 		long idx_yplane = j * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_yplane];
@@ -779,7 +789,7 @@ static void fft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(1, logd3, NZ, NX, u, data_buff, helper_buff, device_id);
+			cfftz(1, logd3, NZ, NX, batch_size_y, u, data_buff, helper_buff, device_id);
 		}
 	}
 
@@ -830,12 +840,14 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
+	int batch_size_y = min(NY, NY / 4);
+
 #pragma omp parallel for firstprivate(logd3) num_threads(num_devices)
-	for (long j = 0; j < NY; j++)
+	for (long j = 0; j < NY / batch_size_y; j++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NZ * NX;
+		long size = NZ * NX * batch_size_y;
 		long idx_yplane = j * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_yplane];
@@ -843,7 +855,7 @@ static void ifft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(-1, logd3, NZ, NX, u, data_buff, helper_buff, device_id);
+			cfftz(-1, logd3, NZ, NX, batch_size_y, u, data_buff, helper_buff, device_id);
 		}
 	}
 
@@ -863,12 +875,14 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
+	int batch_size_z = min(NZ, NZ / 4);
+
 #pragma omp parallel for firstprivate(logd2, logd1) num_threads(num_devices)
-	for (long k = 0; k < NZ; k++)
+	for (long k = 0; k < NZ / batch_size_z; k++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NY * NX;
+		long size = NY * NX * batch_size_z;
 		long idx_zplane = k * size;
 
 		dcomplex *data_buff = (dcomplex *)&xout[idx_zplane];
@@ -876,33 +890,39 @@ static void ifft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(-1, logd2, NY, NX, u, data_buff, helper_buff, device_id);
+			cfftz(-1, logd2, NY, NX, batch_size_z, u, data_buff, helper_buff, device_id);
 
 			// zyx -> zxy
-#pragma omp target teams distribute parallel for simd collapse(2) device(device_id)
-			for (long j = 0; j < NY; j++)
+#pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
+			for (long k = 0; k < batch_size_z; k++)
 			{
-				for (long i = 0; i < NX; i++)
+				for (long j = 0; j < NY; j++)
 				{
-					long idx_src = INDEX_YX;
-					long idx_dst = INDEX_XY;
-					helper_buff[idx_dst].real = data_buff[idx_src].real;
-					helper_buff[idx_dst].imag = data_buff[idx_src].imag;
+					for (long i = 0; i < NX; i++)
+					{
+						long idx_src = INDEX_ZYX;
+						long idx_dst = INDEX_ZXY;
+						helper_buff[idx_dst].real = data_buff[idx_src].real;
+						helper_buff[idx_dst].imag = data_buff[idx_src].imag;
+					}
 				}
 			}
 
-			cfftz(-1, logd1, NX, NY, u, helper_buff, data_buff, device_id);
+			cfftz(-1, logd1, NX, NY, batch_size_z, u, helper_buff, data_buff, device_id);
 
 			// zxy -> zyx
-#pragma omp target teams distribute parallel for simd collapse(2) device(device_id)
-			for (long j = 0; j < NY; j++)
+#pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
+			for (long k = 0; k < batch_size_z; k++)
 			{
-				for (long i = 0; i < NX; i++)
+				for (long j = 0; j < NY; j++)
 				{
-					long idx_src = INDEX_XY;
-					long idx_dst = INDEX_YX;
-					data_buff[idx_dst].real = helper_buff[idx_src].real;
-					data_buff[idx_dst].imag = helper_buff[idx_src].imag;
+					for (long i = 0; i < NX; i++)
+					{
+						long idx_src = INDEX_ZXY;
+						long idx_dst = INDEX_ZYX;
+						data_buff[idx_dst].real = helper_buff[idx_src].real;
+						data_buff[idx_dst].imag = helper_buff[idx_src].imag;
+					}
 				}
 			}
 		}
@@ -960,12 +980,13 @@ static void fftz2(int is,
 									int m,
 									int n,
 									int ny,
+									int batch_size,
 									dcomplex const u[MAXDIM],
 									dcomplex const x[],
 									dcomplex y[],
 									int device_id)
 {
-	int k, n1, li, lj, lk, ku, i, j, i11, i12, i21, i22;
+	int k, n1, li, lj, lk, ku, i, j, i11, i12, i21, i22, b;
 	dcomplex u1;
 
 	/*
@@ -979,58 +1000,66 @@ static void fftz2(int is,
 	lj = 2 * lk;
 	ku = li;
 
-#pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
-	for (i = 0; i <= li - 1; i++)
+#pragma omp target teams distribute parallel for simd collapse(4) device(device_id)
+	for (b = 0; b < batch_size; b++)
 	{
+		for (i = 0; i <= li - 1; i++)
+		{
 #if defined(REF)
-		i11 = i * lk;
-		i12 = i11 + n1;
-		i21 = i * lj;
-		i22 = i21 + lk;
+			i11 = i * lk;
+			i12 = i11 + n1;
+			i21 = i * lj;
+			i22 = i21 + lk;
 
-		if (is >= 1)
-		{
-			u1 = u[ku + i];
-		}
-		else
-		{
-			u1 = dconjg(u[ku + i]);
-		}
-#endif
-
-		/*
-		 * ---------------------------------------------------------------------
-		 * this loop is vectorizable.
-		 * ---------------------------------------------------------------------
-		 */
-		for (k = 0; k <= lk - 1; k++)
-		{
-			for (j = 0; j < ny; j++)
+			if (is >= 1)
 			{
-#if defined(REF)
-				dcomplex x11 = x[i11 + k][j];
-				dcomplex x21 = x[i12 + k][j];
-				y[i21 + k][j] = dcomplex_add(x11, x21);
-				y[i22 + k][j] = dcomplex_mul(u1, dcomplex_sub(x11, x21));
-#else
-				dcomplex const *p_x11 = &x[(i * lk + k) * ny + j];
-				dcomplex const *p_x21 = &x[(i * lk + n1 + k) * ny + j];
-
-				y[(i * lj + k) * ny + j].real = p_x11->real + p_x21->real;
-				y[(i * lj + k) * ny + j].imag = p_x11->imag + p_x21->imag;
-
-				double x11_sub_x21_real = p_x11->real - p_x21->real;
-				double x11_sub_x21_imag = p_x11->imag - p_x21->imag;
-
-				dcomplex u1 = u[ku + i];
-				if (is < 0)
-				{
-					u1.imag *= -1;
-				}
-
-				y[(i * lj + lk + k) * ny + j].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
-				y[(i * lj + lk + k) * ny + j].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
+				u1 = u[ku + i];
+			}
+			else
+			{
+				u1 = dconjg(u[ku + i]);
+			}
 #endif
+
+			/*
+			 * ---------------------------------------------------------------------
+			 * this loop is vectorizable.
+			 * ---------------------------------------------------------------------
+			 */
+			for (k = 0; k <= lk - 1; k++)
+			{
+				for (j = 0; j < ny; j++)
+				{
+#if defined(REF)
+					dcomplex x11 = x[i11 + k][j];
+					dcomplex x21 = x[i12 + k][j];
+					y[i21 + k][j] = dcomplex_add(x11, x21);
+					y[i22 + k][j] = dcomplex_mul(u1, dcomplex_sub(x11, x21));
+#else
+
+					int x11_idx = INDEX_3D(batch_size, n, ny, b, i * lk + k, j);
+					int x21_idx = INDEX_3D(batch_size, n, ny, b, i * lk + n1 + k, j);
+					dcomplex const *p_x11 = &x[x11_idx];
+					dcomplex const *p_x21 = &x[x21_idx];
+
+					int y_idx_a = INDEX_3D(batch_size, n, ny, b, i * lj + k, j);
+					y[y_idx_a].real = p_x11->real + p_x21->real;
+					y[y_idx_a].imag = p_x11->imag + p_x21->imag;
+
+					double x11_sub_x21_real = p_x11->real - p_x21->real;
+					double x11_sub_x21_imag = p_x11->imag - p_x21->imag;
+
+					dcomplex u1 = u[ku + i];
+					if (is < 0)
+					{
+						u1.imag *= -1;
+					}
+
+					int y_idx_b = INDEX_3D(batch_size, n, ny, b, i * lj + lk + k, j);
+					y[y_idx_b].real = u1.real * x11_sub_x21_real - u1.imag * x11_sub_x21_imag;
+					y[y_idx_b].imag = u1.real * x11_sub_x21_imag + u1.imag * x11_sub_x21_real;
+#endif
+				}
 			}
 		}
 	}
