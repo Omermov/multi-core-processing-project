@@ -152,7 +152,8 @@ static dcomplex(*sums);
 static double (*twiddle)[NY][NX];
 static dcomplex(*u);
 static dcomplex (*u0)[NY][NX];
-static dcomplex (*u1)[NY][NX];
+static dcomplex (*u1_h)[NY][NX];
+static dcomplex (*u1_d)[NY][NX];
 static dcomplex(*yy1);
 #endif
 
@@ -174,7 +175,6 @@ static void checksum(int i,
 static void compute_indexmap(double twiddle[NZ][NY][NX]);
 static void compute_initial_conditions(dcomplex u0[NZ][NY][NX]);
 static void evolve(dcomplex u0[NZ][NY][NX],
-									 dcomplex u1[NZ][NY][NX],
 									 double const twiddle[NZ][NY][NX]);
 static void fft(dcomplex const u[MAXDIM],
 								dcomplex x[NTOTAL],
@@ -214,6 +214,11 @@ int main(int argc, char **argv)
 	setenv("IGC_EnableDPEmulation", "1", 1);
 	setenv("OMP_TARGET_OFFLOAD", "MANDATORY", 1);
 
+	int host = omp_get_initial_device();
+	int device = omp_get_default_device();
+
+	printf("host: %d, device: %d\n", host, device);
+
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
 	printf(" DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION mode on\n");
 #else
@@ -221,8 +226,19 @@ int main(int argc, char **argv)
 	twiddle = malloc(sizeof(double) * (NTOTAL));
 	u = malloc(sizeof(dcomplex) * (MAXDIM));
 	u0 = malloc(sizeof(dcomplex) * (NTOTAL));
-	u1 = malloc(sizeof(dcomplex) * (NTOTAL));
-	yy1 = malloc(sizeof(dcomplex) * (NTOTAL));
+	u1_h = malloc(sizeof(dcomplex) * (NTOTAL));
+	u1_d = omp_target_alloc_device(sizeof(dcomplex) * (NTOTAL), device);
+	if (u1_d == NULL)
+	{
+		printf("ERROR: Cannot allocate space for u1 using omp_target_alloc().\n");
+		exit(1);
+	}
+	yy1 = omp_target_alloc_device(sizeof(dcomplex) * (NTOTAL), device);
+	if (yy1 == NULL)
+	{
+		printf("ERROR: Cannot allocate space for yy1 using omp_target_alloc().\n");
+		exit(1);
+	}
 #endif
 	int i;
 	int iter;
@@ -274,13 +290,12 @@ int main(int argc, char **argv)
 	timer_start(T_SETUP);
 #endif
 
-	compute_initial_conditions(u1);
+	compute_indexmap(twiddle);
+	compute_initial_conditions(u1_h);
 	fft_init(MAXDIM);
 
-#pragma omp target data map(alloc : twiddle[0 : NZ][0 : NY][0 : NX], u0[0 : NZ][0 : NY][0 : NX], yy1[0 : NTOTAL]) \
-		map(to : u1[0 : NZ][0 : NY][0 : NX], u[0 : MAXDIM])
+#pragma omp target data map(to : u[0 : MAXDIM])
 	{
-		compute_indexmap(twiddle);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -290,7 +305,13 @@ int main(int argc, char **argv)
 		}
 #endif
 
-		fft(u, (dcomplex *)u1, (dcomplex *)u0, yy1);
+		// host -> device
+		omp_target_memcpy(u1_d, u1_h, sizeof(dcomplex) * NTOTAL, 0, 0, device, host);
+		fft(u, (dcomplex *)u1_d, (dcomplex *)u1_d, yy1);
+		// device -> host
+		omp_target_memcpy(u0, u1_d, sizeof(dcomplex) * NTOTAL, 0, 0, host, device);
+		// host -> device
+		omp_target_memcpy(u1_d, u1_h, sizeof(dcomplex) * NTOTAL, 0, 0, device, host);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -303,7 +324,10 @@ int main(int argc, char **argv)
 			timer_start(T_EVOLVE);
 #endif
 
-			evolve(u0, u1, twiddle);
+			// evolve u0 on host
+			evolve(u0, twiddle);
+			// copy u0 from host to device as u1
+			omp_target_memcpy(u1_d, u0, sizeof(dcomplex) * NTOTAL, 0, 0, device, host);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -313,7 +337,8 @@ int main(int argc, char **argv)
 			}
 #endif
 
-			ifft(u, (dcomplex *)u1, (dcomplex *)u1, yy1);
+			// ifft on device from u1 to itself
+			ifft(u, (dcomplex *)u1_d, (dcomplex *)u1_d, yy1);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -323,7 +348,7 @@ int main(int argc, char **argv)
 			}
 #endif
 
-			checksum(iter, u1, sums);
+			checksum(iter, u1_d, sums);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -454,11 +479,14 @@ static void cfftz(int const is,
 	{
 		fftz2(is, m, m, n, ny, batch_size, u, x, y);
 
-#pragma omp target teams distribute parallel for simd
-		for (i = 0; i < 2 * n * ny * batch_size; i++)
-		{
-			((double *)x)[i] = ((double *)y)[i];
-		}
+		int device = omp_get_default_device();
+		omp_target_memcpy(x, y, sizeof(dcomplex) * NTOTAL, 0, 0, device, device);
+
+		// #pragma omp target teams distribute parallel for simd is_device_ptr(x, y)
+		// 		for (i = 0; i < 2 * n * ny * batch_size; i++)
+		// 		{
+		// 			((double *)x)[i] = ((double *)y)[i];
+		// 		}
 	}
 #endif
 }
@@ -471,7 +499,7 @@ static void checksum(int i,
 	int j, q, r, s;
 	double chk_worker[2] = {0.0, 0.0};
 
-#pragma omp target teams distribute parallel for reduction(+ : chk_worker[0 : 2]) map(tofrom : chk_worker[0 : 2])
+#pragma omp target teams distribute parallel for reduction(+ : chk_worker[0 : 2]) map(tofrom : chk_worker[0 : 2]) is_device_ptr(u1)
 	for (j = 1; j <= 1024; j++)
 	{
 		q = j % NX;
@@ -513,7 +541,7 @@ static void compute_indexmap(double twiddle[NZ][NY][NX])
 	 * ---------------------------------------------------------------------
 	 */
 	ap = -4.0 * ALPHA * PI * PI;
-#pragma omp target teams distribute parallel for simd collapse(3) private(i, j, kk, kk2, jj, kj2, ii)
+#pragma omp parallel for simd collapse(3) private(i, j, kk, kk2, jj, kj2, ii)
 	for (k = 0; k < NZ; k++)
 	{
 		kk = ((k + NZ / 2) % NZ) - NZ / 2;
@@ -626,11 +654,10 @@ static void compute_initial_conditions(dcomplex u0[NZ][NY][NX])
  * ---------------------------------------------------------------------
  */
 static void evolve(dcomplex u0[NZ][NY][NX],
-									 dcomplex u1[NZ][NY][NX],
 									 double const twiddle[NZ][NY][NX])
 {
 	int i, j, k;
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp parallel for simd collapse(3)
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -643,8 +670,8 @@ static void evolve(dcomplex u0[NZ][NY][NX],
 #else
 				u0[k][j][i].real *= twiddle[k][j][i];
 				u0[k][j][i].imag *= twiddle[k][j][i];
-				u1[k][j][i].real = u0[k][j][i].real;
-				u1[k][j][i].imag = u0[k][j][i].imag;
+				// u1[k][j][i].real = u0[k][j][i].real;
+				// u1[k][j][i].imag = u0[k][j][i].imag;
 
 				// u1[k][j][i].real = u0[k][j][i].real * twiddle[k][j][i];
 				// u1[k][j][i].imag = u0[k][j][i].imag * twiddle[k][j][i];
@@ -677,7 +704,7 @@ static void fft(dcomplex const u[MAXDIM],
 	// yzx -> zyx
 
 // zyx -> zxy
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(x, y)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -695,7 +722,7 @@ static void fft(dcomplex const u[MAXDIM],
 	cfftz(1, logd1, NX, NY, NZ, u, y, xout);
 
 // zxy -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -713,7 +740,7 @@ static void fft(dcomplex const u[MAXDIM],
 	cfftz(1, logd2, NY, NX, NZ, u, xout, y);
 
 // zyx -> yzx
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -731,7 +758,7 @@ static void fft(dcomplex const u[MAXDIM],
 	cfftz(1, logd3, NZ, NX, NY, u, y, xout);
 
 	// yzx -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -762,7 +789,7 @@ static void ifft(dcomplex const u[MAXDIM],
 	// zxy -> zyx
 
 // zyx -> yzx
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(x, y)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -780,7 +807,7 @@ static void ifft(dcomplex const u[MAXDIM],
 	cfftz(-1, logd3, NZ, NX, NY, u, y, xout);
 
 // yzx -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -798,7 +825,7 @@ static void ifft(dcomplex const u[MAXDIM],
 	cfftz(-1, logd2, NY, NX, NZ, u, xout, y);
 
 // zyx -> zxy
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -816,7 +843,7 @@ static void ifft(dcomplex const u[MAXDIM],
 	cfftz(-1, logd1, NX, NY, NZ, u, y, xout);
 
 	// zxy -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3)
+#pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -903,7 +930,7 @@ static void fftz2(int const is,
 	lj = 2 * lk;
 	ku = li;
 
-#pragma omp target teams distribute parallel for simd collapse(4) \
+#pragma omp target teams distribute parallel for simd collapse(4) is_device_ptr(x, y) \
 		firstprivate(n1, lk, li, lj, ku) private(b, i, k, j, i11, i12, i21, i22, u1)
 	for (b = 0; b < batch_size; b++)
 	{
