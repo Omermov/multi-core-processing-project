@@ -149,11 +149,13 @@ static dcomplex u0[NTOTAL];
 static dcomplex u1[NTOTAL];
 #else
 static dcomplex(*sums);
-static double (*twiddle)[NY][NX];
-static dcomplex(*u);
-static dcomplex (*u0)[NY][NX];
-static dcomplex (*u1)[NY][NX];
-static dcomplex(*yy1);
+static double (*twiddle_d)[NY][NX];
+static dcomplex(*u_h);
+static dcomplex(*u_d);
+static dcomplex (*u0_d)[NY][NX];
+static dcomplex (*u1_h)[NY][NX];
+static dcomplex (*u1_d)[NY][NX];
+static dcomplex(*yy1_d);
 #endif
 
 static int logd1;
@@ -214,15 +216,20 @@ int main(int argc, char **argv)
 	setenv("IGC_EnableDPEmulation", "1", 1);
 	setenv("OMP_TARGET_OFFLOAD", "MANDATORY", 1);
 
+	int host = omp_get_initial_device();
+	int device = omp_get_default_device();
+
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
 	printf(" DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION mode on\n");
 #else
 	sums = malloc(sizeof(dcomplex) * (NITER_DEFAULT + 1));
-	twiddle = malloc(sizeof(double) * (NTOTAL));
-	u = malloc(sizeof(dcomplex) * (MAXDIM));
-	u0 = malloc(sizeof(dcomplex) * (NTOTAL));
-	u1 = malloc(sizeof(dcomplex) * (NTOTAL));
-	yy1 = malloc(sizeof(dcomplex) * (NTOTAL));
+	twiddle_d = omp_target_alloc_device(sizeof(double) * (NTOTAL), device);
+	u_h = malloc(sizeof(dcomplex) * (MAXDIM));
+	u_d = omp_target_alloc_device(sizeof(dcomplex) * (MAXDIM), device);
+	u0_d = omp_target_alloc_device(sizeof(dcomplex) * (NTOTAL), device);
+	u1_h = malloc(sizeof(dcomplex) * (NTOTAL));
+	u1_d = omp_target_alloc_device(sizeof(dcomplex) * (NTOTAL), device);
+	yy1_d = omp_target_alloc_device(sizeof(dcomplex) * (NTOTAL), device);
 #endif
 	int i;
 	int iter;
@@ -274,13 +281,17 @@ int main(int argc, char **argv)
 	timer_start(T_SETUP);
 #endif
 
-	compute_initial_conditions(u1);
+	// init variables on host
+	compute_initial_conditions(u1_h);
 	fft_init(MAXDIM);
 
-#pragma omp target data map(alloc : twiddle[0 : NZ][0 : NY][0 : NX], u0[0 : NZ][0 : NY][0 : NX], yy1[0 : NTOTAL]) \
-		map(to : u1[0 : NZ][0 : NY][0 : NX], u[0 : MAXDIM])
+	// copy to device
+	omp_target_memcpy(u1_d, u1_h, sizeof(dcomplex) * NTOTAL, 0, 0, device, host);
+	omp_target_memcpy(u_d, u_h, sizeof(dcomplex) * MAXDIM, 0, 0, device, host);
+
+#pragma omp target data use_device_ptr(twiddle_d, u_d, u0_d, u1_d, yy1_d)
 	{
-		compute_indexmap(twiddle);
+		compute_indexmap(twiddle_d);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -290,7 +301,7 @@ int main(int argc, char **argv)
 		}
 #endif
 
-		fft(u, (dcomplex *)u1, (dcomplex *)u0, yy1);
+		fft(u_d, (dcomplex *)u1_d, (dcomplex *)u0_d, yy1_d);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -303,7 +314,7 @@ int main(int argc, char **argv)
 			timer_start(T_EVOLVE);
 #endif
 
-			evolve(u0, u1, twiddle);
+			evolve(u0_d, u1_d, twiddle_d);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -313,7 +324,7 @@ int main(int argc, char **argv)
 			}
 #endif
 
-			ifft(u, (dcomplex *)u1, (dcomplex *)u1, yy1);
+			ifft(u_d, (dcomplex *)u1_d, (dcomplex *)u1_d, yy1_d);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -323,7 +334,7 @@ int main(int argc, char **argv)
 			}
 #endif
 
-			checksum(iter, u1, sums);
+			checksum(iter, u1_d, sums);
 
 #if defined(TIMERS_ENABLED)
 #pragma omp master
@@ -849,7 +860,7 @@ static void fft_init(int n)
 	 */
 	nu = n;
 	m = ilog2(n);
-	u[0] = dcomplex_create((double)m, 0.0);
+	u_h[0] = dcomplex_create((double)m, 0.0);
 	ku = 2;
 	ln = 1;
 
@@ -864,8 +875,8 @@ static void fft_init(int n)
 #if defined(REF)
 			u[i + ku - 1] = dcomplex_create(cos(ti), sin(ti));
 #else
-			u[i + ku - 1].real = cos(ti);
-			u[i + ku - 1].imag = sin(ti);
+			u_h[i + ku - 1].real = cos(ti);
+			u_h[i + ku - 1].imag = sin(ti);
 #endif
 		}
 
