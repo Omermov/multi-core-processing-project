@@ -185,12 +185,12 @@ static void ifft(dcomplex const u[MAXDIM],
 								 dcomplex xout[NTOTAL],
 								 dcomplex y[NTOTAL]);
 static void fft_init(int n);
-static void fftz2(int is,
-									int l,
-									int m,
-									int n,
-									int ny,
-									int batch_size,
+static void fftz2(int const is,
+									int const l,
+									int const m,
+									int const n,
+									int const ny,
+									int const batch_size,
 									dcomplex const u[MAXDIM],
 									dcomplex const x[],
 									dcomplex y[]);
@@ -677,7 +677,7 @@ static void fft(dcomplex const u[MAXDIM],
 	// yzx -> zyx
 
 // zyx -> zxy
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : x[ : 0], y[ : 0])
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -695,7 +695,7 @@ static void fft(dcomplex const u[MAXDIM],
 	cfftz(1, logd1, NX, NY, NZ, u, y, xout);
 
 // zxy -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -713,7 +713,7 @@ static void fft(dcomplex const u[MAXDIM],
 	cfftz(1, logd2, NY, NX, NZ, u, xout, y);
 
 // zyx -> yzx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -731,7 +731,7 @@ static void fft(dcomplex const u[MAXDIM],
 	cfftz(1, logd3, NZ, NX, NY, u, y, xout);
 
 	// yzx -> zyx
-#pragma omp target teams distribute parallel for simd collapse(3) map(from : xout[ : 0], y[ : 0])
+#pragma omp target teams distribute parallel for simd collapse(3)
 	for (int k = 0; k < NZ; k++)
 	{
 		for (int j = 0; j < NY; j++)
@@ -879,12 +879,12 @@ static void fft_init(int n)
  * performs the l-th iteration of the second variant of the stockham FFT
  * ---------------------------------------------------------------------
  */
-static void fftz2(int is,
-									int l,
-									int m,
-									int n,
-									int ny,
-									int batch_size,
+static void fftz2(int const is,
+									int const l,
+									int const m,
+									int const n,
+									int const ny,
+									int const batch_size,
 									dcomplex const u[MAXDIM],
 									dcomplex const x[],
 									dcomplex y[])
