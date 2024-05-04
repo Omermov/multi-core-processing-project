@@ -264,7 +264,7 @@ int main(int argc, char **argv)
 	}
 #endif
 
-	t0 = omp_get_wtime();
+	timer_start(T_TOTAL);
 
 #if defined(TIMERS_ENABLED)
 	timer_start(T_SETUP);
@@ -329,8 +329,8 @@ int main(int argc, char **argv)
 		}
 	} /* end of target data */
 
-	t1 = omp_get_wtime();
-	total_time = t1 - t0;
+	timer_stop(T_TOTAL);
+	total_time = timer_read(T_TOTAL);
 
 	__itt_pause();
 
