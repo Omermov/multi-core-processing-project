@@ -327,15 +327,15 @@ int main(int argc, char **argv)
 #endif
 	}
 
-	for (int device_id = 0; device_id < num_devices; device_id++)
-	{
-#pragma omp target exit data map(release : u[0 : MAXDIM]) device(device_id)
-	}
-
 	timer_stop(T_TOTAL);
 	total_time = timer_read(T_TOTAL);
 
 	__itt_pause();
+
+	for (int device_id = 0; device_id < num_devices; device_id++)
+	{
+#pragma omp target exit data map(release : u[0 : MAXDIM]) device(device_id)
+	}
 
 	verify(NITER_DEFAULT, &verified, &class_npb);
 
