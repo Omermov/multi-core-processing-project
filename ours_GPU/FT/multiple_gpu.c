@@ -283,6 +283,7 @@ int main(int argc, char **argv)
 	fft_init(MAXDIM);
 
 	// copy u to all devices
+#pragma omp parallel for num_threads(num_devices)
 	for (int device_id = 0; device_id < num_devices; device_id++)
 	{
 #pragma omp target enter data map(to : u[0 : MAXDIM]) device(device_id)
@@ -304,6 +305,7 @@ int main(int argc, char **argv)
 		timer_start(T_EVOLVE);
 #endif
 
+		// evolve on CPU
 		evolve(u0, u1, twiddle);
 
 #if defined(TIMERS_ENABLED)
