@@ -16,9 +16,12 @@ default:: ${PROGRAM}
 # Note that this must be run every time, which is why the
 # target does not exist and is not created.
 # If you create a file called "config" you will break things.
-config:
+config: | $(BINDIR)
 	@cd ../sys; ${MAKE} all
 	../sys/setparams ${BENCHMARK} ${CLASS}
+
+$(BINDIR):
+	mkdir $(BINDIR)
 
 COMMON=../common
 ${COMMON}/${RAND}.o: ${COMMON}/${RAND}.f

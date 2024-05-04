@@ -36,13 +36,16 @@
 *.app
 
 ours_CPU/bin/**
+ours_CPU/results/**
 ours_CPU/FT/npbparams.h
 ours_CPU/sys/setparams
 
 ours_GPU/bin/**
+ours_GPU/results/**
 ours_GPU/FT/npbparams.h
 ours_GPU/sys/setparams
 
 reference/bin/**
+reference/results/**
 reference/FT/npbparams.hpp
 reference/sys/setparams
