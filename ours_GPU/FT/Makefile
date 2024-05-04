@@ -13,7 +13,7 @@ ${PROGRAM}: config ${OBJS}
 	${CLINK} ${CLINKFLAGS} -o ${PROGRAM} ${OBJS} ${C_LIB}
 
 ft.o: ${MAIN} npbparams.h
-	${CCOMPILE} ${MAIN}
+	${CCOMPILE} ${MAIN} -o ft.o
 
 clean:
 	- rm -f *.o *~ mputil*
