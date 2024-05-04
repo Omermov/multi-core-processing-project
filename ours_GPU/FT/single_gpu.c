@@ -245,13 +245,8 @@ int main(int argc, char **argv)
 		timer_clear(i);
 	}
 #endif
+
 	setup();
-	// init_ui(u0, u1, twiddle);
-	// 	compute_indexmap(twiddle);
-	// 	compute_initial_conditions(u1);
-	// 	fft_init(MAXDIM);
-	// #pragma omp parallel
-	// 	fft(1, u, u1, u0, yy1, yy2);
 
 	/*
 	 * ---------------------------------------------------------------------
@@ -275,6 +270,7 @@ int main(int argc, char **argv)
 	timer_start(T_SETUP);
 #endif
 
+	// Initialize on CPU
 	compute_initial_conditions(u1);
 	fft_init(MAXDIM);
 
