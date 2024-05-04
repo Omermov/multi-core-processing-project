@@ -135,10 +135,10 @@ Authors of the OpenMP code:
 #define T_FFT 3
 #define T_EVOLVE 4
 #define T_CHECKSUM 5
-#define T_FFTX 6
-#define T_FFTY 7
-#define T_FFTZ 8
-#define T_MAX 8
+#define T_MAX 5
+
+#define BATCH_SIZE_Z (NZ / 4)
+#define BATCH_SIZE_Y (NY / 4)
 
 /* global variables */
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
@@ -289,50 +289,38 @@ int main(int argc, char **argv)
 	}
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
-	{
-		timer_stop(T_SETUP);
-		timer_start(T_FFT);
-	}
+	timer_stop(T_SETUP);
+	timer_start(T_FFT);
 #endif
 
 	fft(u, (dcomplex *)u1, (dcomplex *)u0, yy1);
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
 	timer_stop(T_FFT);
 #endif
 	for (iter = 1; iter <= NITER_DEFAULT; iter++)
 	{
 #if defined(TIMERS_ENABLED)
-#pragma omp master
 		timer_start(T_EVOLVE);
 #endif
 
 		evolve(u0, u1, twiddle);
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
-		{
-			timer_stop(T_EVOLVE);
-			timer_start(T_FFT);
-		}
+		timer_stop(T_EVOLVE);
+		timer_start(T_FFT);
 #endif
 
 		ifft(u, (dcomplex *)u1, (dcomplex *)u1, yy1);
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
-		{
-			timer_stop(T_FFT);
-			timer_start(T_CHECKSUM);
-		}
+		timer_stop(T_FFT);
+		timer_start(T_CHECKSUM);
 #endif
 
 		checksum(iter, u1, sums);
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
 		timer_stop(T_CHECKSUM);
 #endif
 	}
@@ -645,7 +633,7 @@ static void evolve(dcomplex u0[NZ][NY][NX],
 {
 	int i, j, k;
 // #pragma omp target teams distribute parallel for simd collapse(3)
-#pragma omp parallel for
+#pragma omp parallel for collapse(3)
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -706,14 +694,12 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	int batch_size_z = min(NZ, NZ / 4);
-
 #pragma omp parallel for firstprivate(logd1, logd2) num_threads(num_devices)
-	for (long k = 0; k < NZ / batch_size_z; k++)
+	for (long k = 0; k < NZ / BATCH_SIZE_Z; k++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NX * NY * batch_size_z;
+		long size = NX * NY * BATCH_SIZE_Z;
 		long idx_zplane = k * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_zplane];
@@ -721,11 +707,11 @@ static void fft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(to : data_buff[0 : size]) map(from : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(1, logd1, NX, NY, batch_size_z, u, data_buff, helper_buff, device_id);
+			cfftz(1, logd1, NX, NY, BATCH_SIZE_Z, u, data_buff, helper_buff, device_id);
 
 			// zxy -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
-			for (long k = 0; k < batch_size_z; k++)
+			for (long k = 0; k < BATCH_SIZE_Z; k++)
 			{
 				for (long j = 0; j < NY; j++)
 				{
@@ -739,7 +725,7 @@ static void fft(dcomplex const u[MAXDIM],
 				}
 			}
 
-			cfftz(1, logd2, NY, NX, batch_size_z, u, helper_buff, data_buff, device_id);
+			cfftz(1, logd2, NY, NX, BATCH_SIZE_Z, u, helper_buff, data_buff, device_id);
 		}
 	}
 
@@ -759,14 +745,12 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	int batch_size_y = min(NY, NY / 4);
-
 #pragma omp parallel for firstprivate(logd3) num_threads(num_devices)
-	for (long j = 0; j < NY / batch_size_y; j++)
+	for (long j = 0; j < NY / BATCH_SIZE_Y; j++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NZ * NX * batch_size_y;
+		long size = NZ * NX * BATCH_SIZE_Y;
 		long idx_yplane = j * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_yplane];
@@ -774,7 +758,7 @@ static void fft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(1, logd3, NZ, NX, batch_size_y, u, data_buff, helper_buff, device_id);
+			cfftz(1, logd3, NZ, NX, BATCH_SIZE_Y, u, data_buff, helper_buff, device_id);
 		}
 	}
 
@@ -825,14 +809,12 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	int batch_size_y = min(NY, NY / 4);
-
 #pragma omp parallel for firstprivate(logd3) num_threads(num_devices)
-	for (long j = 0; j < NY / batch_size_y; j++)
+	for (long j = 0; j < NY / BATCH_SIZE_Y; j++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NZ * NX * batch_size_y;
+		long size = NZ * NX * BATCH_SIZE_Y;
 		long idx_yplane = j * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_yplane];
@@ -840,7 +822,7 @@ static void ifft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(-1, logd3, NZ, NX, batch_size_y, u, data_buff, helper_buff, device_id);
+			cfftz(-1, logd3, NZ, NX, BATCH_SIZE_Y, u, data_buff, helper_buff, device_id);
 		}
 	}
 
@@ -860,14 +842,12 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
-	int batch_size_z = min(NZ, NZ / 4);
-
 #pragma omp parallel for firstprivate(logd2, logd1) num_threads(num_devices)
-	for (long k = 0; k < NZ / batch_size_z; k++)
+	for (long k = 0; k < NZ / BATCH_SIZE_Z; k++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NY * NX * batch_size_z;
+		long size = NY * NX * BATCH_SIZE_Z;
 		long idx_zplane = k * size;
 
 		dcomplex *data_buff = (dcomplex *)&xout[idx_zplane];
@@ -875,11 +855,11 @@ static void ifft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(-1, logd2, NY, NX, batch_size_z, u, data_buff, helper_buff, device_id);
+			cfftz(-1, logd2, NY, NX, BATCH_SIZE_Z, u, data_buff, helper_buff, device_id);
 
 			// zyx -> zxy
 #pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
-			for (long k = 0; k < batch_size_z; k++)
+			for (long k = 0; k < BATCH_SIZE_Z; k++)
 			{
 				for (long j = 0; j < NY; j++)
 				{
@@ -893,11 +873,11 @@ static void ifft(dcomplex const u[MAXDIM],
 				}
 			}
 
-			cfftz(-1, logd1, NX, NY, batch_size_z, u, helper_buff, data_buff, device_id);
+			cfftz(-1, logd1, NX, NY, BATCH_SIZE_Z, u, helper_buff, data_buff, device_id);
 
 			// zxy -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
-			for (long k = 0; k < batch_size_z; k++)
+			for (long k = 0; k < BATCH_SIZE_Z; k++)
 			{
 				for (long j = 0; j < NY; j++)
 				{
@@ -1062,7 +1042,7 @@ static void init_ui(dcomplex u0[NZ][NY][NX],
 										double twiddle[NZ][NY][NX])
 {
 	int i, j, k;
-#pragma omp parallel for
+#pragma omp parallel for collapse(3)
 	for (k = 0; k < NZ; k++)
 	{
 		for (j = 0; j < NY; j++)
@@ -1135,9 +1115,6 @@ static void print_timers(void)
 	tstrings[3] = (char *)"            fft ";
 	tstrings[4] = (char *)"         evolve ";
 	tstrings[5] = (char *)"       checksum ";
-	tstrings[6] = (char *)"           fftx ";
-	tstrings[7] = (char *)"           ffty ";
-	tstrings[8] = (char *)"           fftz ";
 
 	t_m = timer_read(T_TOTAL);
 	if (t_m <= 0.0)
