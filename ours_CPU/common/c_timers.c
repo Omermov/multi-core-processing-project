@@ -41,7 +41,7 @@ Authors of the C++ code:
 	Júnior Löff <loffjh@gmail.com>
 */
 
-#include "wtime.h"
+#include "omp.h"
 #include <stdlib.h>
 
 /*  prototype  */
@@ -52,9 +52,7 @@ void wtime(double *);
 /*****************************************************************/
 double elapsed_time(void)
 {
-	double t;
-	wtime(&t);
-	return (t);
+	return omp_get_wtime();
 }
 
 double start[64], elapsed[64];

@@ -295,7 +295,7 @@ int main(int argc, char **argv)
 	}
 #endif
 
-	t0 = omp_get_wtime();
+	timer_start(T_TOTAL);
 
 #if defined(TIMERS_ENABLED)
 	timer_start(T_SETUP);
@@ -349,8 +349,6 @@ int main(int argc, char **argv)
 			}
 #endif
 
-// TODO: I think this barrier is not required
-#pragma omp barrier
 			checksum(iter, u1, dims[0], dims[1], dims[2]);
 
 #if defined(TIMERS_ENABLED)
@@ -360,8 +358,8 @@ int main(int argc, char **argv)
 		}
 	} /* end parallel */
 
-	t1 = omp_get_wtime();
-	total_time = t1 - t0;
+	timer_stop(T_TOTAL);
+	total_time = timer_read(T_TOTAL);
 
 	__itt_pause();
 
@@ -1097,21 +1095,22 @@ static void init_ui(void *pointer_u0,
 #pragma omp parallel for private(i, j, k)
 	for (k = 0; k < d3; k++)
 	{
-#if defined(REF)
 		for (j = 0; j < d2; j++)
 		{
 			for (i = 0; i < d1; i++)
 			{
+#if defined(REF)
 				u0[k][j][i] = dcomplex_create(0.0, 0.0);
 				u1[k][j][i] = dcomplex_create(0.0, 0.0);
+#else
+				u0[k][j][i].real = 0.0;
+				u0[k][j][i].imag = 0.0;
+				u1[k][j][i].real = 0.0;
+				u1[k][j][i].imag = 0.0;
+#endif
 				twiddle[k][j][i] = 0.0;
 			}
 		}
-#else
-		memset((void *)u0[k], 0, d1 * d2 * sizeof(dcomplex));
-		memset((void *)u1[k], 0, d1 * d2 * sizeof(dcomplex));
-		memset((void *)twiddle[k], 0, d1 * d2 * sizeof(double));
-#endif
 	}
 }
 
