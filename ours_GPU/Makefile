@@ -55,7 +55,7 @@ clean:
 	- rm -f sys/setparams sys/makesuite sys/setparams.h
 
 cleanall: clean
-	- rm -r bin/*
+	- rm -r bin
 
 veryclean: clean
 	- rm config/make.def config/suite.def Part*
