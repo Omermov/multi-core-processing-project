@@ -138,7 +138,8 @@ Authors of the OpenMP code:
 #define T_FFTX 6
 #define T_FFTY 7
 #define T_FFTZ 8
-#define T_MAX 8
+#define T_TRANSPOSE 9
+#define T_MAX 9
 
 /* global variables */
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
@@ -295,11 +296,8 @@ int main(int argc, char **argv)
 	{
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
-		{
-			timer_stop(T_SETUP);
-			timer_start(T_FFT);
-		}
+		timer_stop(T_SETUP);
+		timer_start(T_FFT);
 #endif
 
 		// host -> device
@@ -311,13 +309,11 @@ int main(int argc, char **argv)
 		omp_target_memcpy(u1_d, u1_h, sizeof(dcomplex) * NTOTAL, 0, 0, device, host);
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
 		timer_stop(T_FFT);
 #endif
 		for (iter = 1; iter <= NITER_DEFAULT; iter++)
 		{
 #if defined(TIMERS_ENABLED)
-#pragma omp master
 			timer_start(T_EVOLVE);
 #endif
 
@@ -327,28 +323,21 @@ int main(int argc, char **argv)
 			omp_target_memcpy(u1_d, u0, sizeof(dcomplex) * NTOTAL, 0, 0, device, host);
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
-			{
-				timer_stop(T_EVOLVE);
-				timer_start(T_FFT);
-			}
+			timer_stop(T_EVOLVE);
+			timer_start(T_FFT);
 #endif
 
 			// ifft on device from u1 to itself
 			ifft(u, (dcomplex *)u1_d, (dcomplex *)u1_d, yy1);
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
-			{
-				timer_stop(T_FFT);
-				timer_start(T_CHECKSUM);
-			}
+			timer_stop(T_FFT);
+			timer_start(T_CHECKSUM);
 #endif
 
 			checksum(iter, u1_d, sums);
 
 #if defined(TIMERS_ENABLED)
-#pragma omp master
 			timer_stop(T_CHECKSUM);
 #endif
 		}
@@ -697,6 +686,10 @@ static void fft(dcomplex const u[MAXDIM],
 	// cfftz (3)
 	// yzx -> zyx
 
+#if defined(TIMERS_ENABLED)
+	timer_start(T_TRANSPOSE);
+#endif
+
 // zyx -> zxy
 #pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(x, y)
 	for (long k = 0; k < NZ; k++)
@@ -713,7 +706,17 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_TRANSPOSE);
+	timer_start(T_FFTX);
+#endif
+
 	cfftz(1, logd1, NX, NY, NZ, u, y, xout);
+
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_FFTX);
+	timer_start(T_TRANSPOSE);
+#endif
 
 // zxy -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
@@ -731,7 +734,17 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_TRANSPOSE);
+	timer_start(T_FFTY);
+#endif
+
 	cfftz(1, logd2, NY, NX, NZ, u, xout, y);
+
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_FFTY);
+	timer_start(T_TRANSPOSE);
+#endif
 
 // zyx -> yzx
 #pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
@@ -749,7 +762,17 @@ static void fft(dcomplex const u[MAXDIM],
 		}
 	}
 
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_TRANSPOSE);
+	timer_start(T_FFTZ);
+#endif
+
 	cfftz(1, logd3, NZ, NX, NY, u, y, xout);
+
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_FFTZ);
+	timer_start(T_TRANSPOSE);
+#endif
 
 	// yzx -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
@@ -766,6 +789,10 @@ static void fft(dcomplex const u[MAXDIM],
 			}
 		}
 	}
+
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_TRANSPOSE);
+#endif
 }
 
 static void ifft(dcomplex const u[MAXDIM],
@@ -781,6 +808,10 @@ static void ifft(dcomplex const u[MAXDIM],
 	// zyx -> zxy
 	// cfftz (1)
 	// zxy -> zyx
+
+#if defined(TIMERS_ENABLED)
+	timer_start(T_TRANSPOSE);
+#endif
 
 // zyx -> yzx
 #pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(x, y)
@@ -798,7 +829,17 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_TRANSPOSE);
+	timer_start(T_FFTZ);
+#endif
+
 	cfftz(-1, logd3, NZ, NX, NY, u, y, xout);
+
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_FFTZ);
+	timer_start(T_TRANSPOSE);
+#endif
 
 // yzx -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
@@ -816,7 +857,17 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_TRANSPOSE);
+	timer_start(T_FFTY);
+#endif
+
 	cfftz(-1, logd2, NY, NX, NZ, u, xout, y);
+
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_FFTY);
+	timer_start(T_TRANSPOSE);
+#endif
 
 // zyx -> zxy
 #pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
@@ -834,7 +885,17 @@ static void ifft(dcomplex const u[MAXDIM],
 		}
 	}
 
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_TRANSPOSE);
+	timer_start(T_FFTX);
+#endif
+
 	cfftz(-1, logd1, NX, NY, NZ, u, y, xout);
+
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_FFTX);
+	timer_start(T_TRANSPOSE);
+#endif
 
 	// zxy -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) is_device_ptr(xout, y)
@@ -851,6 +912,10 @@ static void ifft(dcomplex const u[MAXDIM],
 			}
 		}
 	}
+
+#if defined(TIMERS_ENABLED)
+	timer_stop(T_TRANSPOSE);
+#endif
 }
 
 /*
@@ -1080,6 +1145,7 @@ static void print_timers(void)
 	tstrings[6] = (char *)"           fftx ";
 	tstrings[7] = (char *)"           ffty ";
 	tstrings[8] = (char *)"           fftz ";
+	tstrings[9] = (char *)"      transpose ";
 
 	t_m = timer_read(T_TOTAL);
 	if (t_m <= 0.0)
