@@ -137,9 +137,6 @@ Authors of the OpenMP code:
 #define T_CHECKSUM 5
 #define T_MAX 5
 
-#define batch_size_z (NZ / 4)
-#define batch_size_y (NY / 4)
-
 /* global variables */
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
 static dcomplex sums[NITER_DEFAULT + 1];
@@ -230,8 +227,8 @@ int main(int argc, char **argv)
 	// limit batch size for big problems
 	if (NX >= 2048)
 	{
-		batch_size_z = MIN(batch_size_z, NZ / 4);
-		batch_size_y = MIN(batch_size_z, NY / 4);
+		batch_size_z = min(batch_size_z, NZ / 4);
+		batch_size_y = min(batch_size_z, NY / 4);
 	}
 
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
