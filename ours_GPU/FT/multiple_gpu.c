@@ -61,6 +61,7 @@ Authors of the OpenMP code:
 
 #include <string.h>
 #include <stdbool.h>
+#include <stdlib.h>
 #include <ittnotify.h>
 
 /*
@@ -217,8 +218,18 @@ int main(int argc, char **argv)
 	setenv("OverrideDefaultFP64Settings", "1", 1);
 	setenv("IGC_EnableDPEmulation", "1", 1);
 	setenv("OMP_TARGET_OFFLOAD", "MANDATORY", 1);
+	
+	if (argc != 2){
+		printf("missing a parameter for num_of_devices\n");
+		exit(1);
+	}
 
-	num_devices = omp_get_num_devices();
+	num_devices = (int) strtol(argv[1], NULL, 10);
+	if (num_devices != 1 &&  num_devices != 2 && num_devices != 4){
+		printf("illegal num_devices: %d\n", num_devices);
+		exit(1);
+	}
+	printf("num_devices: %d \n", num_devices);
 
 	// divide batches evenly between devices
 	batch_size_z = NZ / num_devices;
