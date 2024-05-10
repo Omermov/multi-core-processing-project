@@ -137,8 +137,8 @@ Authors of the OpenMP code:
 #define T_CHECKSUM 5
 #define T_MAX 5
 
-#define BATCH_SIZE_Z (NZ / 4)
-#define BATCH_SIZE_Y (NY / 4)
+#define batch_size_z (NZ / 4)
+#define batch_size_y (NY / 4)
 
 /* global variables */
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
@@ -161,6 +161,8 @@ static int logd2;
 static int logd3;
 
 static int num_devices;
+static int batch_size_z;
+static int batch_size_y;
 
 /* function prototypes */
 static void cfftz(int const is,
@@ -220,6 +222,17 @@ int main(int argc, char **argv)
 	setenv("OMP_TARGET_OFFLOAD", "MANDATORY", 1);
 
 	num_devices = omp_get_num_devices();
+
+	// divide batches evenly between devices
+	batch_size_z = NZ / num_devices;
+	batch_size_y = NY / num_devices;
+
+	// limit batch size for big problems
+	if (NX >= 2048)
+	{
+		batch_size_z = MIN(batch_size_z, NZ / 4);
+		batch_size_y = MIN(batch_size_z, NY / 4);
+	}
 
 #if defined(DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION)
 	printf(" DO_NOT_ALLOCATE_ARRAYS_WITH_DYNAMIC_MEMORY_AND_AS_SINGLE_DIMENSION mode on\n");
@@ -697,11 +710,11 @@ static void fft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd1, logd2) num_threads(num_devices)
-	for (long k = 0; k < NZ / BATCH_SIZE_Z; k++)
+	for (long k = 0; k < NZ / batch_size_z; k++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NX * NY * BATCH_SIZE_Z;
+		long size = NX * NY * batch_size_z;
 		long idx_zplane = k * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_zplane];
@@ -709,11 +722,11 @@ static void fft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(to : data_buff[0 : size]) map(from : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(1, logd1, NX, NY, BATCH_SIZE_Z, u, data_buff, helper_buff, device_id);
+			cfftz(1, logd1, NX, NY, batch_size_z, u, data_buff, helper_buff, device_id);
 
 			// zxy -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
-			for (long k = 0; k < BATCH_SIZE_Z; k++)
+			for (long k = 0; k < batch_size_z; k++)
 			{
 				for (long j = 0; j < NY; j++)
 				{
@@ -727,7 +740,7 @@ static void fft(dcomplex const u[MAXDIM],
 				}
 			}
 
-			cfftz(1, logd2, NY, NX, BATCH_SIZE_Z, u, helper_buff, data_buff, device_id);
+			cfftz(1, logd2, NY, NX, batch_size_z, u, helper_buff, data_buff, device_id);
 		}
 	}
 
@@ -748,11 +761,11 @@ static void fft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd3) num_threads(num_devices)
-	for (long j = 0; j < NY / BATCH_SIZE_Y; j++)
+	for (long j = 0; j < NY / batch_size_y; j++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NZ * NX * BATCH_SIZE_Y;
+		long size = NZ * NX * batch_size_y;
 		long idx_yplane = j * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_yplane];
@@ -760,7 +773,7 @@ static void fft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(1, logd3, NZ, NX, BATCH_SIZE_Y, u, data_buff, helper_buff, device_id);
+			cfftz(1, logd3, NZ, NX, batch_size_y, u, data_buff, helper_buff, device_id);
 		}
 	}
 
@@ -812,11 +825,11 @@ static void ifft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd3) num_threads(num_devices)
-	for (long j = 0; j < NY / BATCH_SIZE_Y; j++)
+	for (long j = 0; j < NY / batch_size_y; j++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NZ * NX * BATCH_SIZE_Y;
+		long size = NZ * NX * batch_size_y;
 		long idx_yplane = j * size;
 
 		dcomplex *data_buff = (dcomplex *)&y[idx_yplane];
@@ -824,7 +837,7 @@ static void ifft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(-1, logd3, NZ, NX, BATCH_SIZE_Y, u, data_buff, helper_buff, device_id);
+			cfftz(-1, logd3, NZ, NX, batch_size_y, u, data_buff, helper_buff, device_id);
 		}
 	}
 
@@ -845,11 +858,11 @@ static void ifft(dcomplex const u[MAXDIM],
 	}
 
 #pragma omp parallel for firstprivate(logd2, logd1) num_threads(num_devices)
-	for (long k = 0; k < NZ / BATCH_SIZE_Z; k++)
+	for (long k = 0; k < NZ / batch_size_z; k++)
 	{
 		int device_id = omp_get_thread_num() % num_devices;
 
-		long size = NY * NX * BATCH_SIZE_Z;
+		long size = NY * NX * batch_size_z;
 		long idx_zplane = k * size;
 
 		dcomplex *data_buff = (dcomplex *)&xout[idx_zplane];
@@ -857,11 +870,11 @@ static void ifft(dcomplex const u[MAXDIM],
 
 #pragma omp target data map(tofrom : data_buff[0 : size]) map(alloc : helper_buff[0 : size]) device(device_id)
 		{
-			cfftz(-1, logd2, NY, NX, BATCH_SIZE_Z, u, data_buff, helper_buff, device_id);
+			cfftz(-1, logd2, NY, NX, batch_size_z, u, data_buff, helper_buff, device_id);
 
 			// zyx -> zxy
 #pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
-			for (long k = 0; k < BATCH_SIZE_Z; k++)
+			for (long k = 0; k < batch_size_z; k++)
 			{
 				for (long j = 0; j < NY; j++)
 				{
@@ -875,11 +888,11 @@ static void ifft(dcomplex const u[MAXDIM],
 				}
 			}
 
-			cfftz(-1, logd1, NX, NY, BATCH_SIZE_Z, u, helper_buff, data_buff, device_id);
+			cfftz(-1, logd1, NX, NY, batch_size_z, u, helper_buff, data_buff, device_id);
 
 			// zxy -> zyx
 #pragma omp target teams distribute parallel for simd collapse(3) device(device_id)
-			for (long k = 0; k < BATCH_SIZE_Z; k++)
+			for (long k = 0; k < batch_size_z; k++)
 			{
 				for (long j = 0; j < NY; j++)
 				{
