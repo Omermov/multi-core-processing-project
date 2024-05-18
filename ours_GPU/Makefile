@@ -51,11 +51,12 @@ suite:
 # because those makefiles need config/make.def
 clean:
 	- rm -f core
+	- rm -f */*.yaml */*.optrpt
 	- rm -f *~ */core */*~ */*.o */npbparams.h */*.obj */*.exe
 	- rm -f sys/setparams sys/makesuite sys/setparams.h
 
 cleanall: clean
-	- rm -r bin/*
+	- rm -rf bin
 
 veryclean: clean
 	- rm config/make.def config/suite.def Part*

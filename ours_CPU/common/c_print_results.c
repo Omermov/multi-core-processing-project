@@ -138,14 +138,14 @@ void c_print_results(char *name,
 	printf(" Compile date    =             %12s\n", compiletime);
 	printf(" Compiler ver    =             %12s\n", compilerversion);
 	printf(" OpenMP version  =             %12s\n", libversion);
-	printf("\n Compile options:\n");
-	printf("    CC           = %s\n", cc);
-	printf("    CLINK        = %s\n", clink);
-	printf("    C_LIB        = %s\n", c_lib);
-	printf("    C_INC        = %s\n", c_inc);
-	printf("    CFLAGS       = %s\n", cflags);
-	printf("    CLINKFLAGS   = %s\n", clinkflags);
-	printf("    RAND         = %s\n", rand);
+	// printf("\n Compile options:\n");
+	// printf("    CC           = %s\n", cc);
+	// printf("    CLINK        = %s\n", clink);
+	// printf("    C_LIB        = %s\n", c_lib);
+	// printf("    C_INC        = %s\n", c_inc);
+	// printf("    CFLAGS       = %s\n", cflags);
+	// printf("    CLINKFLAGS   = %s\n", clinkflags);
+	// printf("    RAND         = %s\n", rand);
 #ifdef SMP
 	evalue = getenv("MP_SET_NUMTHREADS");
 	printf("   MULTICPUS = %s\n", evalue);
@@ -160,16 +160,16 @@ void c_print_results(char *name,
 	 * printf(" Moffett Field, CA  94035-1000\n\n");
 	 * printf(" Fax: 650-604-3957\n\n");
 	 */
-	printf("\n\n");
+	// printf("\n\n");
 
-	printf("----------------------------------------------------------------------\n");
-	printf("    NPB-CPP is developed by: \n");
-	printf("        Dalvan Griebler\n");
-	printf("        Gabriell Araujo (Sequential Porting)\n");
-	printf("        Júnior Löff (Parallel Implementation)\n");
-	printf("\n");
-	printf("    In case of questions or problems, please send an e-mail to us:\n");
-	printf("        dalvan.griebler; gabriell.araujo; junior.loff@edu.pucrs.br\n");
-	printf("----------------------------------------------------------------------\n");
-	printf("\n");
+	// printf("----------------------------------------------------------------------\n");
+	// printf("    NPB-CPP is developed by: \n");
+	// printf("        Dalvan Griebler\n");
+	// printf("        Gabriell Araujo (Sequential Porting)\n");
+	// printf("        Júnior Löff (Parallel Implementation)\n");
+	// printf("\n");
+	// printf("    In case of questions or problems, please send an e-mail to us:\n");
+	// printf("        dalvan.griebler; gabriell.araujo; junior.loff@edu.pucrs.br\n");
+	// printf("----------------------------------------------------------------------\n");
+	// printf("\n");
 }

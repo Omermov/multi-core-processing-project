@@ -53,9 +53,9 @@ CFLAGS = -xCORE-AVX512 -Ofast -fiopenmp -ipo
 CFLAGS += -qopt-mem-layout-trans=4 -mprefer-vector-width=512
 CFLAGS += -fopenmp-targets=spir64 # Required for offloading
 CFLAGS += -qopt-report=max # Add report files
-CFLAGS += -g -gline-tables-only -fdebug-info-for-profiling # Debug flags
-# CFLAGS += -DREF
+CFLAGS += -g -gline-tables-only -fdebug-info-for-profiling -parallel-source-info=2 # Debug flags
 # CFLAGS += -DTIMERS_ENABLED
+# CFLAGS += -DREF
 
 #---------------------------------------------------------------------------
 # Global *link time* flags. Flags for increasing maximum executable
